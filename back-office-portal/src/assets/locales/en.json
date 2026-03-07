@@ -1,0 +1,72 @@
+{
+  "common": {
+    "login": "Login",
+    "logout": "Logout",
+    "dashboard": "Dashboard",
+    "discrepancies": "Discrepancies",
+    "reports": "Reports",
+    "routes": "Routes",
+    "auditLogs": "Audit Logs",
+    "transactions": "Transactions",
+    "settings": "Settings",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "export": "Export"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "totalRevenue": "Total Revenue",
+    "totalTransactions": "Total Transactions",
+    "revenueLoss": "Revenue Loss",
+    "totalDiscrepancies": "Total Discrepancies",
+    "recentAlerts": "Recent Alerts"
+  },
+  "discrepancies": {
+    "title": "Discrepancy Records",
+    "status": "Status",
+    "route": "Route",
+    "bus": "Bus",
+    "date": "Date",
+    "expectedRevenue": "Expected Revenue",
+    "actualRevenue": "Actual Revenue",
+    "loss": "Loss",
+    "pending": "Pending",
+    "investigating": "Investigating",
+    "resolved": "Resolved",
+    "filter": "Filter",
+    "noFilters": "No filters applied"
+  },
+  "reports": {
+    "title": "Reports",
+    "generateReport": "Generate Report",
+    "daily": "Daily",
+    "allTime": "All-Time",
+    "ticketSales": "Ticket Sales",
+    "exportCSV": "Export as CSV",
+    "dateRange": "Date Range",
+    "from": "From",
+    "to": "To"
+  },
+  "routes": {
+    "title": "Routes",
+    "createRoute": "Create Route",
+    "routeNumber": "Route Number",
+    "busNumber": "Bus Number",
+    "stops": "Stops",
+    "addStop": "Add Stop"
+  },
+  "auditLogs": {
+    "title": "Audit Logs",
+    "user": "User",
+    "action": "Action",
+    "resource": "Resource",
+    "timestamp": "Timestamp",
+    "details": "Details"
+  }
+}

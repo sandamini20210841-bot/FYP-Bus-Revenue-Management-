@@ -1,0 +1,52 @@
+{
+  "common": {
+    "login": "உள்நுழைக",
+    "register": "பதிவு செய்",
+    "logout": "வெளியேறு",
+    "home": "வீடு",
+    "profile": "சுயவிவரம்",
+    "settings": "அமைப்புகள்",
+    "loading": "லோட் ஆகிறது...",
+    "error": "பிழை",
+    "success": "வெற்றி",
+    "cancel": "ரத்து",
+    "submit": "சமர்ப்பி"
+  },
+  "auth": {
+    "email": "மின்னஞ்சல்",
+    "password": "கடவுச்சொல்",
+    "confirmPassword": "கடவுச்சொல் உறுதிப்படுத்த",
+    "phoneNumber": "ஃபோன் எண்",
+    "fullName": "முழு பெயர்",
+    "loginTitle": "உங்கள் கணக்கில் உள்நுழைக",
+    "registerTitle": "புதிய கணக்கை உருவாக்கு",
+    "dontHaveAccount": "கணக்கு இல்லையா?",
+    "alreadyHaveAccount": "ஏற்கனவே கணக்கு உள்ளதா?",
+    "forgotPassword": "கடவுச்சொல் மறந்துவிட்டீர்களா?",
+    "enterOTP": "OTP உள்ளிடவும்",
+    "otpSent": "உங்கள் ஃபோன் எண்ணுக்கு OTP அனுப்பப்பட்டுள்ளது"
+  },
+  "tickets": {
+    "buyTicket": "டிக்கட் வாங்கவும்",
+    "myTickets": "எனது டிக்கெட்டுகள்",
+    "ticketHistory": "டிக்கெட் வரலாறு",
+    "routeSelection": "பாதை தேர்ந்தெடுக்கவும்",
+    "stopSelection": "நிறுத்தங்கள் தேர்ந்தெடுக்கவும்",
+    "ticketDetails": "டிக்கெட் விவரங்கள்",
+    "amount": "தொகை",
+    "date": "தேதி",
+    "status": "நிலை",
+    "shareTicket": "டிக்கெட் ஷேர் செய்",
+    "qrCode": "QR குறியீடு"
+  },
+  "profile": {
+    "myProfile": "என் சுயவிவரம்",
+    "editProfile": "சுயவிவரத்தை திருத்து",
+    "transactions": "பரிவர்த்தனைகள்",
+    "language": "மொழி",
+    "notifications": "அறிவிப்புகள்",
+    "preferences": "விருப்பங்கள்",
+    "changePassword": "கடவுச்சொல் மாற்று",
+    "updateSuccess": "சுயவிவரம் வெற்றிகரமாக புதுப்பிக்கப்பட்டது"
+  }
+}

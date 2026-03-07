@@ -1,0 +1,70 @@
+{
+  "common": {
+    "login": "உள்நுழைக",
+    "logout": "வெளியேறு",
+    "dashboard": "கணக்குப்பலகை",
+    "discrepancies": "முரண்பாடுகள்",
+    "reports": "அறிக்கைகள்",
+    "routes": "வழிகள்",
+    "auditLogs": "தணிக்கை பதிவுகள்",
+    "transactions": "பரிவர்த்தனைகள்",
+    "settings": "அமைப்புகள்",
+    "loading": "பூரணமாகிறது...",
+    "error": "பிழை",
+    "success": "வெற்றி",
+    "cancel": "ரத்து",
+    "submit": "சமர்ப்பிக்க",
+    "save": "சேமிக்க",
+    "edit": "திருத்தவும்",
+    "delete": "நீக்குக",
+    "export": "ஏற்றுமதி"
+  },
+  "dashboard": {
+    "title": "கணக்குப்பலகை",
+    "totalRevenue": "மொத்த வருமானம்",
+    "totalTransactions": "மொத்த பரிவர்த்தனைகள்",
+    "revenueLoss": "வருமான இழப்பு",
+    "totalDiscrepancies": "மொத்த முரண்பாடுகள்",
+    "recentAlerts": "சமீபத்திய எச்சரிக்கைகள்"
+  },
+  "discrepancies": {
+    "title": "முரண்பாட்டு பதிவுகள்",
+    "status": "நிலை",
+    "route": "வழி",
+    "bus": "பேருந்து",
+    "date": "தேதி",
+    "expectedRevenue": "எதிர்பார்க்கப்படும் வருமானம்",
+    "actualRevenue": "உண்மையான வருமானம்",
+    "loss": "இழப்பு",
+    "pending": "நிலுவையில்",
+    "investigating": "விசாரணை",
+    "resolved": "தீர்க்கப்பட்ட"
+  },
+  "reports": {
+    "title": "அறிக்கைகள்",
+    "generateReport": "அறிக்கை உருவாக்க",
+    "daily": "தினசரி",
+    "allTime": "எல்லா நேரம்",
+    "ticketSales": "டிக்கெட் விற்பனை",
+    "exportCSV": "CSV ஆக ஏற்றுமதி",
+    "dateRange": "தேதி வரம்பு",
+    "from": "இலிருந்து",
+    "to": "வரை"
+  },
+  "routes": {
+    "title": "வழிகள்",
+    "createRoute": "வழி உருவாக்க",
+    "routeNumber": "வழி எண்",
+    "busNumber": "பேருந்து எண்",
+    "stops": "நிறுத்தங்கள்",
+    "addStop": "நிறுத்தம் சேர்க்க"
+  },
+  "auditLogs": {
+    "title": "தணிக்கை பதிவுகள்",
+    "user": "பயனர்",
+    "action": "செயல்",
+    "resource": "வளம்",
+    "timestamp": "நேರக்குறி",
+    "details": "விவரங்கள்"
+  }
+}

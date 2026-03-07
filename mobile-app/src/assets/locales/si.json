@@ -1,0 +1,52 @@
+{
+  "common": {
+    "login": "පුරන්න",
+    "register": "ඉවත් කරන්න",
+    "logout": "ඉවත් කරන්න",
+    "home": "ගෙය",
+    "profile": "පෙරනිමි",
+    "settings": "සැකසුම්",
+    "loading": "පූරණය වෙමින්...",
+    "error": "දෝෂය",
+    "success": "සාර්ථකම",
+    "cancel": "අවලංගු කරන්න",
+    "submit": "ඉදිරිපත් කරන්න"
+  },
+  "auth": {
+    "email": "විද්යුත් ලිපිනය",
+    "password": "මුරපදය",
+    "confirmPassword": "මුරපදය තහවුරු කරන්න",
+    "phoneNumber": "දුරකතන අංකය",
+    "fullName": "සම්පූර්ණ නම",
+    "loginTitle": "ඔබේ ගිණුමට පුරන්න",
+    "registerTitle": "නව ගිණුම සාදන්න",
+    "dontHaveAccount": "ගිණුම නැත?",
+    "alreadyHaveAccount": "ඉතිරි ගිණුම තිබේද?",
+    "forgotPassword": "මුරපදය අමතක කරගත්තේද?",
+    "enterOTP": "OTP ඇතුළු කරන්න",
+    "otpSent": "ඔබේ දුරකතන අංකයට OTP යවා ඇත"
+  },
+  "tickets": {
+    "buyTicket": "ටිකට් ගගන්න",
+    "myTickets": "මේ ටිකට්",
+    "ticketHistory": "ටිකට් ඉතිහාසය",
+    "routeSelection": "මාර්ගය තෝරන්න",
+    "stopSelection": "ස්టොප් තෝරන්න",
+    "ticketDetails": "ටිකට් විස්තර",
+    "amount": "මුදල්",
+    "date": "දිනය",
+    "status": "තත්ත්වය",
+    "shareTicket": "ටිකට් බෙදාගන්න",
+    "qrCode": "QR කේතය"
+  },
+  "profile": {
+    "myProfile": "මේ පෙරනිමි",
+    "editProfile": "පෙරනිමි සංස්කරණය",
+    "transactions": "ගනුදෙනු",
+    "language": "භාෂාව",
+    "notifications": "දැනුම්දීම්",
+    "preferences": "මනතාවන්",
+    "changePassword": "මුරපදය වෙනස් කරන්න",
+    "updateSuccess": "පෙරනිමි සාර්ථකව යාවත්කාල කරන ලදි"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "common": {
+    "login": "පුරන්න",
+    "logout": "ඉවත් කරන්න",
+    "dashboard": "උපකරණ පුවරුව",
+    "discrepancies": "ඒවා සමපාත නොවීම",
+    "reports": "වාර්තා",
+    "routes": "මාර්ගයන්",
+    "auditLogs": "විගණන ලඝු",
+    "transactions": "ගනුදෙනු",
+    "settings": "සැකසුම්",
+    "loading": "පූරණය...",
+    "error": "දෝෂය",
+    "success": "සාර්ථකම",
+    "cancel": "අවලංගු",
+    "submit": "ඉදිරිපත් කරන්න",
+    "save": "සුරකුණු කරන්න",
+    "edit": "සංස්කරණය",
+    "delete": "ඉවත් කරන්න",
+    "export": "අපනයන"
+  },
+  "dashboard": {
+    "title": "උපකරණ පුවරුව",
+    "totalRevenue": "සම්පූර්ණ ආදායම",
+    "totalTransactions": "සම්පූර්ණ ගනුදෙනු",
+    "revenueLoss": "ආදායම් අපයෝජනය",
+    "totalDiscrepancies": "සම්පූර්ණ ඒවා සමපාත නොවීම",
+    "recentAlerts": "මෑතකාලීන අවවාද"
+  },
+  "discrepancies": {
+    "title": "ඒවා සමපාත නොවීම ඉතිහාසය",
+    "status": "තත්ත්වය",
+    "route": "මාර්ගය",
+    "bus": "බස්",
+    "date": "දිනය",
+    "expectedRevenue": "අපේක්ෂිත ආදායම",
+    "actualRevenue": "නිකट ආදායම",
+    "loss": "අපයෝජනය",
+    "pending": "අපේක්ෂිතයි",
+    "investigating": "පරීක්ෂා කරමින්",
+    "resolved": "විසඳුමි"
+  },
+  "reports": {
+    "title": "වාර්තා",
+    "generateReport": "වාර්තා සාදන්න",
+    "daily": "දෛනිකი",
+    "allTime": "සෑම කාලයකම",
+    "ticketSales": "තිකට් විකිණීම",
+    "exportCSV": "CSV ලෙස අපනයන",
+    "dateRange": "දින පරාසය",
+    "from": "සිට",
+    "to": "දක්වා"
+  },
+  "routes": {
+    "title": "මාර්ගයන්",
+    "createRoute": "මාර්ගය සාදන්න",
+    "routeNumber": "මාර්ගයේ අංකය",
+    "busNumber": "බස් අංකය",
+    "stops": "නවතා",
+    "addStop": "නවතා එකතු කරන්න"
+  },
+  "auditLogs": {
+    "title": "විගණන ලඝු",
+    "user": "පරිශීලක",
+    "action": "ක්‍රියාව",
+    "resource": "සම්පත්",
+    "timestamp": "කාල මුද්‍රාව",
+    "details": "විස්තර"
+  }
+}

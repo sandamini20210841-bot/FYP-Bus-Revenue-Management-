@@ -1,0 +1,52 @@
+{
+  "common": {
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout",
+    "home": "Home",
+    "profile": "Profile",
+    "settings": "Settings",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "submit": "Submit"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "phoneNumber": "Phone Number",
+    "fullName": "Full Name",
+    "loginTitle": "Login to Your Account",
+    "registerTitle": "Create New Account",
+    "dontHaveAccount": "Don't have an account?",
+    "alreadyHaveAccount": "Already have an account?",
+    "forgotPassword": "Forgot Password?",
+    "enterOTP": "Enter OTP",
+    "otpSent": "OTP sent to your phone number"
+  },
+  "tickets": {
+    "buyTicket": "Buy Ticket",
+    "myTickets": "My Tickets",
+    "ticketHistory": "Ticket History",
+    "routeSelection": "Select Route",
+    "stopSelection": "Select Stops",
+    "ticketDetails": "Ticket Details",
+    "amount": "Amount",
+    "date": "Date",
+    "status": "Status",
+    "shareTicket": "Share Ticket",
+    "qrCode": "QR Code"
+  },
+  "profile": {
+    "myProfile": "My Profile",
+    "editProfile": "Edit Profile",
+    "transactions": "Transactions",
+    "language": "Language",
+    "notifications": "Notifications",
+    "preferences": "Preferences",
+    "changePassword": "Change Password",
+    "updateSuccess": "Profile updated successfully"
+  }
+}
