@@ -48,6 +48,8 @@ type Stop struct {
 	RouteID       string    `json:"route_id"`
 	StopName      string    `json:"stop_name"`
 	SequenceOrder int       `json:"sequence_order"`
+	DistanceKm    float64   `json:"distance_km"`
+	Amount        float64   `json:"amount"`
 	Coordinates   string    `json:"coordinates"`
 	CreatedAt     time.Time `json:"created_at"`
 }

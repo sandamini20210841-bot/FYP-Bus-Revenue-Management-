@@ -41,7 +41,7 @@ services:
     container_name: busticket_backend
     environment:
       PORT: 8000
-      POSTGRES_URL: postgres://busticket:busticket_password@postgres:5432/busticket
+      POSTGRES_URL: postgres://busticket:busticket_password@postgres:5432/busticket?sslmode=disable
       MONGO_URL: mongodb://admin:admin_password@mongodb:27017
       MONGO_DB_NAME: busticket
     ports:

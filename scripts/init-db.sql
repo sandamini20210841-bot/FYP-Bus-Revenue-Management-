@@ -32,6 +32,8 @@ CREATE TABLE stops (
   route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
   stop_name VARCHAR(255) NOT NULL,
   sequence_order INTEGER NOT NULL,
+  distance_km DECIMAL(10, 2),
+  amount DECIMAL(10, 2),
   coordinates POINT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
