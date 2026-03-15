@@ -68,6 +68,8 @@ func main() {
 	auth.Post("/login", handlers.Login)
 	auth.Post("/refresh-token", handlers.RefreshToken)
 	auth.Post("/logout", middleware.AuthRequired(), handlers.Logout)
+	auth.Post("/forgot-password", handlers.ForgotPassword)
+	auth.Post("/reset-password", handlers.ResetPassword)
 
 	// Protected routes
 	protected := api.Group("")
@@ -86,6 +88,7 @@ func main() {
 	users.Get("/:userId", handlers.GetUser)
 	users.Put("/:userId", handlers.UpdateUser)
 	users.Get("/:userId/transactions", handlers.GetUserTransactions)
+	users.Post("/me/change-password", handlers.ChangePassword)
 
 	// Routes management
 	routes := protected.Group("/routes")

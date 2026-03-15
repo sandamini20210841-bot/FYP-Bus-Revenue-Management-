@@ -5,6 +5,7 @@ import "time"
 // User represents a system user (rider, bus_owner, accountant, admin)
 type User struct {
 	ID            string    `json:"id"`
+	PublicID      string    `json:"public_id"`
 	Email         string    `json:"email"`
 	PhoneNumber   string    `json:"phone_number"`
 	FullName      string    `json:"full_name"`
@@ -14,6 +15,16 @@ type User struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	LastLogin     *time.Time `json:"last_login"`
+}
+
+// PasswordResetToken represents a password reset token stored in the database
+type PasswordResetToken struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	TokenHash string    `json:"-"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Used      bool      `json:"used"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Ticket represents a purchased bus ticket

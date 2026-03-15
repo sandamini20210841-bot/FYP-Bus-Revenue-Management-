@@ -30,6 +30,14 @@ api.interceptors.response.use(
   },
   (error: AxiosError) => {
     if (error.response?.status === 401) {
+      const path = window.location.pathname;
+
+      // Let auth-related pages handle 401s themselves
+      if (path === '/login' || path === '/register' || path === '/forgot-password') {
+        return Promise.reject(error);
+      }
+
+      // For other pages, treat 401 as token expiration and redirect
       localStorage.removeItem('authToken');
       localStorage.removeItem('refreshToken');
       window.location.href = '/login';

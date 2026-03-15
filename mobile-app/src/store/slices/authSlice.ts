@@ -16,11 +16,29 @@ interface AuthState {
   error: string | null;
 }
 
+let persistedUser: User | null = null;
+let persistedToken: string | null = null;
+let persistedRefreshToken: string | null = null;
+
+if (typeof window !== 'undefined') {
+  try {
+    const rawUser = window.localStorage.getItem('authUser');
+    if (rawUser) {
+      persistedUser = JSON.parse(rawUser) as User;
+    }
+  } catch {
+    persistedUser = null;
+  }
+
+  persistedToken = window.localStorage.getItem('authToken');
+  persistedRefreshToken = window.localStorage.getItem('refreshToken');
+}
+
 const initialState: AuthState = {
-  user: null,
-  token: null,
-  refreshToken: null,
-  isAuthenticated: false,
+  user: persistedUser,
+  token: persistedToken,
+  refreshToken: persistedRefreshToken,
+  isAuthenticated: Boolean(persistedUser && persistedToken && persistedRefreshToken),
   loading: false,
   error: null,
 };
