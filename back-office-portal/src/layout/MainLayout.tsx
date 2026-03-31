@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "../store";
 import { logout } from "../store/slices/authSlice";
+import NotificationContainer from "../components/NotificationContainer";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -119,10 +120,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-slate-900">
-                Bus Revenue
+                FareLink
               </span>
               <span className="text-xs text-slate-500">
-                Discrepancy Management
+                Back-office portal
               </span>
             </div>
           </div>
@@ -442,7 +443,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto relative">
+        <NotificationContainer />
         <div className="max-w-6xl mx-auto px-8 py-6">{children}</div>
       </main>
     </div>

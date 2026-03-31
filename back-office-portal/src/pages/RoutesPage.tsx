@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useDispatch } from "react-redux";
+import type { AppDispatch } from "../store";
+import { addNotification } from "../store/slices/alertsSlice";
 import api from "../utils/axios";
 
 interface RouteStop {
@@ -19,6 +22,7 @@ interface RouteDefinition {
 }
 
 const RoutesPage: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [routeNumber, setRouteNumber] = useState("");
   const [routeNumberError, setRouteNumberError] = useState<string | null>(
@@ -41,6 +45,10 @@ const RoutesPage: React.FC = () => {
   const [editingRoute, setEditingRoute] = useState<RouteDefinition | null>(
     null
   );
+  const [routePendingDelete, setRoutePendingDelete] =
+    useState<RouteDefinition | null>(null);
+  const [isSavingRoute, setIsSavingRoute] = useState(false);
+  const [isDeletingRoute, setIsDeletingRoute] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleAddStop = () => {
@@ -216,6 +224,47 @@ const RoutesPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const openDeleteConfirmation = (route: RouteDefinition) => {
+    setRoutePendingDelete(route);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (isDeletingRoute || !routePendingDelete) return;
+    const route = routePendingDelete;
+
+    setIsDeletingRoute(true);
+    try {
+      if (route.backendId) {
+        await api.delete(`/routes/${route.backendId}`);
+      }
+
+      setRoutes((prev) => prev.filter((r) => r.id !== route.id));
+
+      dispatch(
+        addNotification({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          message: "Route deleted successfully",
+          type: "success",
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
+    } catch {
+      dispatch(
+        addNotification({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          message: "Failed to delete route. Please try again.",
+          type: "error",
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
+    } finally {
+      setIsDeletingRoute(false);
+      setRoutePendingDelete(null);
+    }
+  };
+
   const toggleRouteExpanded = (routeId: number) => {
     setExpandedRouteIds((prev) =>
       prev.includes(routeId)
@@ -225,10 +274,15 @@ const RoutesPage: React.FC = () => {
   };
 
   const handleSaveRoute = async () => {
+    if (isSavingRoute) return;
+
     let isValid = true;
+
+    const missingMessages: string[] = [];
 
     if (!routeNumber) {
       setRouteNumberError("Route number is required.");
+      missingMessages.push("Route number is missing");
       isValid = false;
     } else if (routeNumberError) {
       isValid = false;
@@ -236,6 +290,7 @@ const RoutesPage: React.FC = () => {
 
     if (!routeName.trim()) {
       setRouteNameError("Route name is required.");
+      missingMessages.push("Route name is missing");
       isValid = false;
     } else {
       setRouteNameError(null);
@@ -252,12 +307,24 @@ const RoutesPage: React.FC = () => {
       setStopsError(
         "Add at least one stop with both a name and an amount."
       );
+      missingMessages.push("At least one stop with name and amount is required");
       isValid = false;
     } else {
       setStopsError(null);
     }
 
     if (!isValid) {
+      missingMessages.forEach((message) => {
+        dispatch(
+          addNotification({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            message,
+            type: "error",
+            timestamp: new Date().toISOString(),
+            read: false,
+          })
+        );
+      });
       return;
     }
 
@@ -275,6 +342,7 @@ const RoutesPage: React.FC = () => {
         })),
     };
 
+    setIsSavingRoute(true);
     try {
       if (editingRoute && editingRoute.backendId) {
         await api.put(`/routes/${editingRoute.backendId}`, payload);
@@ -291,6 +359,16 @@ const RoutesPage: React.FC = () => {
               : r
           )
         );
+
+        dispatch(
+          addNotification({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            message: "Route updated successfully",
+            type: "success",
+            timestamp: new Date().toISOString(),
+            read: false,
+          })
+        );
       } else {
         const response = await api.post("/routes", payload);
         const createdRoute = (response.data as any)?.route;
@@ -306,12 +384,24 @@ const RoutesPage: React.FC = () => {
             stops: stops.map((s) => ({ ...s })),
           },
         ]);
+
+        dispatch(
+          addNotification({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            message: "Route created successfully",
+            type: "success",
+            timestamp: new Date().toISOString(),
+            read: false,
+          })
+        );
       }
 
       setIsModalOpen(false);
       setEditingRoute(null);
     } catch {
       setStopsError("Failed to save route. Please try again.");
+    } finally {
+      setIsSavingRoute(false);
     }
   };
 
@@ -389,32 +479,32 @@ const RoutesPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Routes</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage bus routes and their configurations.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleOpenModal}
-          className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
-        >
-          <span>+ Create Route</span>
-        </button>
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900">Routes</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Manage bus routes and their configurations.
+        </p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Route List</h2>
         </div>
+        <div className="px-6 pt-3 pb-3 flex justify-start">
+          <button
+            type="button"
+            onClick={handleOpenModal}
+            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
+          >
+            <span>+ Create Route</span>
+          </button>
+        </div>
         {routes.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-500">
+          <div className="px-6 pb-10 pt-2 text-center text-sm text-slate-500">
             No routes added yet.
           </div>
         ) : (
-          <div className="px-6 py-4 space-y-3 text-sm">
+          <div className="px-6 pt-0 pb-4 space-y-3 text-sm">
             {routes.map((route) => {
               const isExpanded = expandedRouteIds.includes(route.id);
               return (
@@ -443,28 +533,66 @@ const RoutesPage: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <span
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditRoute(route);
-                      }}
-                      role="button"
-                      aria-label="Edit route"
-                      title="Edit"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        className="h-3.5 w-3.5"
-                        aria-hidden="true"
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditRoute(route);
+                        }}
+                        role="button"
+                        aria-label="Edit route"
+                        title="Edit"
                       >
-                        <path
-                          d="M4 13.5V16h2.5L14 8.5 11.5 6 4 13.5zM15.8 6L14 4.2 15.2 3c.4-.4 1-.4 1.4 0l.4.4c.4.4.4 1 0 1.4L15.8 6z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          className="h-3.5 w-3.5"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M4 13.5V16h2.5L14 8.5 11.5 6 4 13.5zM15.8 6L14 4.2 15.2 3c.4-.4 1-.4 1.4 0l.4.4c.4.4.4 1 0 1.4L15.8 6z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </span>
+                      <span
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDeleteConfirmation(route);
+                        }}
+                        role="button"
+                        aria-label="Delete route"
+                        title="Delete"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          className="h-3.5 w-3.5"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M6 7.5V15C6 15.5523 6.44772 16 7 16H13C13.5523 16 14 15.5523 14 15V7.5"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M5 5.5H15"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M8.5 4.5H11.5"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </span>
+                    </div>
                   </button>
 
                   {isExpanded && (
@@ -721,16 +849,58 @@ const RoutesPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                disabled={isSavingRoute}
+                className="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveRoute}
-                className="rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
+                disabled={isSavingRoute}
+                className="rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {editingRoute ? "Save Changes" : "Save Route"}
+                {isSavingRoute
+                  ? editingRoute
+                    ? "Saving changes..."
+                    : "Saving route..."
+                  : editingRoute
+                  ? "Save Changes"
+                  : "Save Route"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {routePendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">
+              Delete Route
+            </h3>
+            <p className="text-xs text-slate-600 mb-4">
+              Are you sure you want to delete {" "}
+              <span className="font-semibold text-slate-900">
+                {routePendingDelete.routeNumber} · {routePendingDelete.routeName}
+              </span>
+              ?
+            </p>
+            <div className="flex justify-end gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setRoutePendingDelete(null)}
+                disabled={isDeletingRoute}
+                className="rounded-full border border-slate-200 px-4 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingRoute}
+                className="rounded-full bg-red-600 px-4 py-1.5 font-medium text-white shadow-sm hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isDeletingRoute ? "Deleting..." : "Yes"}
               </button>
             </div>
           </div>

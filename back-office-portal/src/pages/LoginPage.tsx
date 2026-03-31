@@ -15,16 +15,30 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setLocalError(null);
     dispatch(setAuthError(null));
     dispatch(setAuthLoading(true));
+    setSubmitting(true);
 
     try {
       const response = await api.post("/auth/login", { email, password });
       const { token, refreshToken, user } = response.data;
+
+      const rawRole = (user?.role || "").toString().toLowerCase();
+      const isAllowedRole =
+        rawRole === "admin" || rawRole === "bus_owner" || rawRole === "accountant";
+
+      if (!isAllowedRole) {
+        setLocalError(
+          "This back-office portal is only for admin, bus owner and accountant accounts. Riders should use the FareLink mobile app."
+        );
+        return;
+      }
 
       if (token) {
         localStorage.setItem("authToken", token);
@@ -56,6 +70,7 @@ const LoginPage = () => {
       dispatch(setAuthError("Login failed"));
     } finally {
       dispatch(setAuthLoading(false));
+      setSubmitting(false);
     }
   };
 
@@ -152,9 +167,10 @@ const LoginPage = () => {
 
           <button
             type="submit"
+            disabled={submitting}
             className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:ring-offset-0 disabled:opacity-60"
           >
-            Sign in
+            {submitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
 

@@ -355,11 +355,34 @@ func parseToFloat(s string) (float64, error) {
 
 // DeleteRoute deletes a route
 func DeleteRoute(c *fiber.Ctx) error {
-	_ = c.Params("routeId")
+	routeID := strings.TrimSpace(c.Params("routeId"))
+	if routeID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "routeId is required",
+		})
+	}
 
 	// TODO: Verify user is bus_owner who created this route
-	// TODO: Delete route from database
-	// TODO: Delete associated stops
+
+	result, err := database.Exec(`DELETE FROM routes WHERE id = $1`, routeID)
+	if err != nil {
+		log.Printf("failed to delete route %s: %v", routeID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to delete route",
+		})
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("failed to get rows affected for delete route %s: %v", routeID, err)
+	}
+	if rows == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Route not found",
+		})
+	}
+
+	// Associated stops are removed automatically via ON DELETE CASCADE in the schema
 	// TODO: Create audit log
 
 	return c.JSON(fiber.Map{

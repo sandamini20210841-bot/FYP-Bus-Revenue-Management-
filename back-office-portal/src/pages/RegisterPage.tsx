@@ -14,9 +14,11 @@ const RegisterPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setError(null);
     setSuccess(null);
 
@@ -25,6 +27,7 @@ const RegisterPage = () => {
       return;
     }
 
+    setSubmitting(true);
     try {
       await api.post("/auth/register", {
         email,
@@ -41,6 +44,8 @@ const RegisterPage = () => {
     } catch (err) {
       console.error("Registration failed", err);
       setError("Could not create account. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -190,9 +195,10 @@ const RegisterPage = () => {
 
           <button
             type="submit"
+            disabled={submitting}
             className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:ring-offset-0 disabled:opacity-60"
           >
-            Create account
+            {submitting ? "Creating account..." : "Create account"}
           </button>
         </form>
 

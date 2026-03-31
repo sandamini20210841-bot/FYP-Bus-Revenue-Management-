@@ -12,6 +12,7 @@ import MainLayout from "./layout/MainLayout";
 import DashboardPage from "./pages/DashboardPage";
 import RoutesPage from "./pages/RoutesPage";
 import DiscrepanciesPage from "./pages/DiscrepanciesPage";
+import ReportsPage from "./pages/ReportsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -78,7 +79,7 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <div>Reports Page</div>
+                  <ReportsPage />
                 </MainLayout>
               </RequireAuth>
             }

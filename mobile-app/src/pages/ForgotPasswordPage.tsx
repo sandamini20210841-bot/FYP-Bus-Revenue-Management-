@@ -11,6 +11,7 @@ const ForgotPasswordPage = () => {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setMessage(null);
     setError(null);
     setSubmitting(true);

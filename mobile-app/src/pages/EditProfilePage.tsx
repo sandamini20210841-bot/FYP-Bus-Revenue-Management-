@@ -91,6 +91,7 @@ const EditProfilePage = () => {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     setError(null);
     setSuccess(null);
 
@@ -124,8 +125,8 @@ const EditProfilePage = () => {
       return;
     }
 
+    setSaving(true);
     try {
-      setSaving(true);
       const response = await api.put(`/users/me`, {
         full_name: trimmedFullName,
         email: trimmedEmail,

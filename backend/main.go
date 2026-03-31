@@ -24,16 +24,11 @@ func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
-	// Initialize database connections
+	// Initialize PostgreSQL connection (MongoDB is not required for this setup)
 	if err := database.InitPostgres(cfg); err != nil {
 		log.Fatalf("Failed to initialize PostgreSQL: %v", err)
 	}
 	defer database.ClosePostgres()
-
-	if err := database.InitMongoDB(cfg); err != nil {
-		log.Fatalf("Failed to initialize MongoDB: %v", err)
-	}
-	defer database.CloseMongoDB()
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{

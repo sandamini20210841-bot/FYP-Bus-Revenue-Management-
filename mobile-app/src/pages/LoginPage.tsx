@@ -16,6 +16,7 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!localError) return;
@@ -27,9 +28,11 @@ const LoginPage = () => {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setLocalError(null);
     dispatch(setAuthError(null));
     dispatch(setAuthLoading(true));
+    setSubmitting(true);
 
     try {
       const response = await api.post("/auth/login", { email, password });
@@ -76,6 +79,7 @@ const LoginPage = () => {
       dispatch(setAuthError("Login failed"));
     } finally {
       dispatch(setAuthLoading(false));
+      setSubmitting(false);
     }
   };
 
@@ -174,9 +178,10 @@ const LoginPage = () => {
 
             <button
               type="submit"
+              disabled={submitting}
               className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-4 py-2.5 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:ring-offset-0 disabled:opacity-60"
             >
-              Sign in
+              {submitting ? "Signing in..." : "Sign in"}
             </button>
           </form>
 

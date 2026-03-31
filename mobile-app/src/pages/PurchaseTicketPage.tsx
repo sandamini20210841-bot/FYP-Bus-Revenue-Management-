@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../utils/axios";
 import MobileShell from "../layout/MobileShell";
 
@@ -32,6 +32,10 @@ const PurchaseTicketPage = () => {
   const [locationState, setLocationState] = useState<LocationState>({
     status: "idle",
   });
+
+  const busDropdownRef = useRef<HTMLDivElement | null>(null);
+  const fromDropdownRef = useRef<HTMLDivElement | null>(null);
+  const toDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const reverseGeocode = async (lat: number, lon: number): Promise<string | null> => {
     try {
@@ -143,6 +147,48 @@ const PurchaseTicketPage = () => {
 
     fetchStops();
   }, []);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    if (!showBusDropdown && !showFromDropdown && !showToDropdown) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+
+      if (
+        showBusDropdown &&
+        busDropdownRef.current &&
+        !busDropdownRef.current.contains(target)
+      ) {
+        setShowBusDropdown(false);
+      }
+
+      if (
+        showFromDropdown &&
+        fromDropdownRef.current &&
+        !fromDropdownRef.current.contains(target)
+      ) {
+        setShowFromDropdown(false);
+      }
+
+      if (
+        showToDropdown &&
+        toDropdownRef.current &&
+        !toDropdownRef.current.contains(target)
+      ) {
+        setShowToDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showBusDropdown, showFromDropdown, showToDropdown]);
 
   // Automatically calculate amount when bus, from and to are chosen
   useEffect(() => {
@@ -258,7 +304,7 @@ const PurchaseTicketPage = () => {
           onSubmit={handleSubmit}
           className="mt-4 space-y-4 max-w-md mx-auto"
         >
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" ref={busDropdownRef}>
             <label className="block text-xs font-medium text-slate-200">
               Bus number
             </label>
@@ -305,7 +351,7 @@ const PurchaseTicketPage = () => {
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" ref={fromDropdownRef}>
             <label className="block text-xs font-medium text-slate-200">
               From (your location)
             </label>
@@ -365,7 +411,7 @@ const PurchaseTicketPage = () => {
             )}
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" ref={toDropdownRef}>
             <label className="block text-xs font-medium text-slate-200">
               To (destination)
             </label>
