@@ -1,0 +1,7 @@
+# Ignore all Node.js dependencies folders across the repository
+node_modules/
+**/node_modules/
+
+# Ignore environment files
+.env
+.env.*

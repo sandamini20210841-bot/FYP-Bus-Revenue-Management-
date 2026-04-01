@@ -3,6 +3,7 @@ import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../store";
 import { addNotification } from "../store/slices/alertsSlice";
 import api from "../utils/axios";
+import RouteMapModal from "../components/RouteMapModal";
 
 interface RouteStop {
   id: number;
@@ -652,6 +653,8 @@ const RoutesPage: React.FC = () => {
                 ×
               </button>
             </div>
+
+            <RouteMapModal className="mb-4" />
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
