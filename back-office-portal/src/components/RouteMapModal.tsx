@@ -10,6 +10,7 @@ interface RouteMapModalProps {
 		lon: number;
 	};
 	zoom?: number;
+	onLocationChange?: (next: { lat: number; lon: number }) => void;
 }
 
 const DEFAULT_CENTER = {
@@ -48,6 +49,7 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
 	className,
 	center = DEFAULT_CENTER,
 	zoom = 11,
+	onLocationChange,
 }) => {
 	const apiKey = import.meta.env.VITE_GEOAPIFY_API_KEY;
 	const [location, setLocation] = React.useState(center);
@@ -60,8 +62,9 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
 	const handlePickLocation = React.useCallback(
 		(next: { lat: number; lon: number }) => {
 			setLocation(next);
+			onLocationChange?.(next);
 		},
-		[]
+		[onLocationChange]
 	);
 
 	if (!apiKey) {

@@ -31,6 +31,8 @@ func CreateRoute(c *fiber.Ctx) error {
 		BusNumber   string      `json:"bus_number"`
 		Stops       []StopInput `json:"stops" validate:"required"`
 		Description string      `json:"description"`
+		Latitude    *float64    `json:"latitude"`
+		Longitude   *float64    `json:"longitude"`
 	}
 
 	var req CreateRouteRequest
@@ -55,13 +57,23 @@ func CreateRoute(c *fiber.Ctx) error {
 	// Insert route into PostgreSQL. created_by is left NULL for now until
 	// authentication is wired and we can associate the route with a user.
 	var routeID string
+	var latitude sql.NullFloat64
+	var longitude sql.NullFloat64
+	if req.Latitude != nil {
+		latitude = sql.NullFloat64{Float64: *req.Latitude, Valid: true}
+	}
+	if req.Longitude != nil {
+		longitude = sql.NullFloat64{Float64: *req.Longitude, Valid: true}
+	}
 	err := database.QueryRow(
-		`INSERT INTO routes (route_number, bus_number, description)
-		 VALUES ($1, $2, $3)
+		`INSERT INTO routes (route_number, bus_number, description, latitude, longitude)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id`,
 		strings.TrimSpace(req.RouteNumber),
 		strings.TrimSpace(req.BusNumber),
 		strings.TrimSpace(req.Description),
+		latitude,
+		longitude,
 	).Scan(&routeID)
 	if err != nil {
 		log.Printf("failed to insert route: %v", err)
@@ -117,6 +129,8 @@ func CreateRoute(c *fiber.Ctx) error {
 			"route_number": strings.TrimSpace(req.RouteNumber),
 			"bus_number":   strings.TrimSpace(req.BusNumber),
 			"description":  strings.TrimSpace(req.Description),
+			"latitude":     req.Latitude,
+			"longitude":    req.Longitude,
 			"stops":        req.Stops,
 		},
 	})
@@ -140,7 +154,7 @@ func GetRoutes(c *fiber.Ctx) error {
 
 	// Query routes from database (newest first)
 	rows, err := database.Query(
-		`SELECT id, route_number, bus_number, description
+		`SELECT id, route_number, bus_number, description, latitude, longitude
 		 FROM routes
 		 ORDER BY created_at DESC
 		 LIMIT $1 OFFSET $2`,
@@ -160,15 +174,27 @@ func GetRoutes(c *fiber.Ctx) error {
 		RouteNumber string         `json:"route_number"`
 		BusNumber   string         `json:"bus_number"`
 		Description string         `json:"description"`
+		Latitude    *float64       `json:"latitude,omitempty"`
+		Longitude   *float64       `json:"longitude,omitempty"`
 		Stops       []StopResponse `json:"stops"`
 	}
 
 	routes := []RouteResponse{}
 	for rows.Next() {
 		var r RouteResponse
-		if err := rows.Scan(&r.ID, &r.RouteNumber, &r.BusNumber, &r.Description); err != nil {
+		var latitude sql.NullFloat64
+		var longitude sql.NullFloat64
+		if err := rows.Scan(&r.ID, &r.RouteNumber, &r.BusNumber, &r.Description, &latitude, &longitude); err != nil {
 			log.Printf("failed to scan route row: %v", err)
 			continue
+		}
+		if latitude.Valid {
+			v := latitude.Float64
+			r.Latitude = &v
+		}
+		if longitude.Valid {
+			v := longitude.Float64
+			r.Longitude = &v
 		}
 
 		// Load stops for this route
@@ -251,6 +277,8 @@ func UpdateRoute(c *fiber.Ctx) error {
 		BusNumber   string      `json:"bus_number"`
 		Stops       []StopInput `json:"stops"`
 		Description string      `json:"description"`
+		Latitude    *float64    `json:"latitude"`
+		Longitude   *float64    `json:"longitude"`
 	}
 
 	var req UpdateRouteRequest
@@ -272,17 +300,30 @@ func UpdateRoute(c *fiber.Ctx) error {
 		})
 	}
 
+	var latitude sql.NullFloat64
+	var longitude sql.NullFloat64
+	if req.Latitude != nil {
+		latitude = sql.NullFloat64{Float64: *req.Latitude, Valid: true}
+	}
+	if req.Longitude != nil {
+		longitude = sql.NullFloat64{Float64: *req.Longitude, Valid: true}
+	}
+
 	// Update route details
 	_, err := database.Exec(
 		`UPDATE routes
 		 SET route_number = $1,
 		     bus_number = $2,
 		     description = $3,
+		     latitude = $4,
+		     longitude = $5,
 		     updated_at = NOW()
-		 WHERE id = $4`,
+		 WHERE id = $6`,
 		strings.TrimSpace(req.RouteNumber),
 		strings.TrimSpace(req.BusNumber),
 		strings.TrimSpace(req.Description),
+		latitude,
+		longitude,
 		routeID,
 	)
 	if err != nil {
@@ -343,6 +384,8 @@ func UpdateRoute(c *fiber.Ctx) error {
 			"route_number": strings.TrimSpace(req.RouteNumber),
 			"bus_number":   strings.TrimSpace(req.BusNumber),
 			"description":  strings.TrimSpace(req.Description),
+			"latitude":     req.Latitude,
+			"longitude":    req.Longitude,
 			"stops":        req.Stops,
 		},
 	})

@@ -49,6 +49,8 @@ type Route struct {
 	BusNumber  string    `json:"bus_number"`
 	CreatedBy  string    `json:"created_by"`
 	Description string   `json:"description"`
+	Latitude   *float64  `json:"latitude,omitempty"`
+	Longitude  *float64  `json:"longitude,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }

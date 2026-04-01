@@ -36,6 +36,8 @@ CREATE TABLE routes (
   bus_number VARCHAR(50) NOT NULL,
   created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   description TEXT,
+  latitude DECIMAL(10, 7),
+  longitude DECIMAL(10, 7),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -19,8 +19,15 @@ interface RouteDefinition {
   backendId?: string;
   routeNumber: string;
   routeName: string;
+  latitude?: number;
+  longitude?: number;
   stops: RouteStop[];
 }
+
+const DEFAULT_ROUTE_COORDINATES = {
+  lat: 6.9271,
+  lon: 79.8612,
+};
 
 const RoutesPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -31,6 +38,9 @@ const RoutesPage: React.FC = () => {
   );
   const [routeName, setRouteName] = useState("");
   const [routeNameError, setRouteNameError] = useState<string | null>(null);
+  const [routeCoordinates, setRouteCoordinates] = useState(
+    DEFAULT_ROUTE_COORDINATES
+  );
   const [stopsError, setStopsError] = useState<string | null>(null);
   const [stops, setStops] = useState<RouteStop[]>([ 
     { 
@@ -188,6 +198,7 @@ const RoutesPage: React.FC = () => {
     setRouteNumberError(null);
     setRouteName("");
     setRouteNameError(null);
+    setRouteCoordinates(DEFAULT_ROUTE_COORDINATES);
     setStopsError(null);
     setStops([
       {
@@ -213,6 +224,10 @@ const RoutesPage: React.FC = () => {
     setRouteNumberError(null);
     setRouteName(route.routeName);
     setRouteNameError(null);
+    setRouteCoordinates({
+      lat: route.latitude ?? DEFAULT_ROUTE_COORDINATES.lat,
+      lon: route.longitude ?? DEFAULT_ROUTE_COORDINATES.lon,
+    });
     setStopsError(null);
     setStops(
       route.stops.map((s, index) => ({
@@ -334,6 +349,8 @@ const RoutesPage: React.FC = () => {
       route_number: routeNumber,
       bus_number: "",
       description: routeName,
+      latitude: routeCoordinates.lat,
+      longitude: routeCoordinates.lon,
       stops: stops
         .filter((s) => s.name.trim().length > 0)
         .map((s) => ({
@@ -355,6 +372,8 @@ const RoutesPage: React.FC = () => {
                   ...r,
                   routeNumber,
                   routeName,
+                  latitude: routeCoordinates.lat,
+                  longitude: routeCoordinates.lon,
                   stops: stops.map((s) => ({ ...s })),
                 }
               : r
@@ -382,6 +401,8 @@ const RoutesPage: React.FC = () => {
             backendId,
             routeNumber,
             routeName,
+            latitude: routeCoordinates.lat,
+            longitude: routeCoordinates.lon,
             stops: stops.map((s) => ({ ...s })),
           },
         ]);
@@ -466,6 +487,18 @@ const RoutesPage: React.FC = () => {
               backendId: r.id || r.ID,
               routeNumber: r.route_number || r.routeNumber || "",
               routeName: r.description || r.route_name || "",
+              latitude:
+                typeof r.latitude === "number"
+                  ? r.latitude
+                  : typeof r.lat === "number"
+                  ? r.lat
+                  : undefined,
+              longitude:
+                typeof r.longitude === "number"
+                  ? r.longitude
+                  : typeof r.lon === "number"
+                  ? r.lon
+                  : undefined,
               stops: mappedStops,
             };
           })
@@ -654,7 +687,11 @@ const RoutesPage: React.FC = () => {
               </button>
             </div>
 
-            <RouteMapModal className="mb-4" />
+            <RouteMapModal
+              className="mb-4"
+              center={routeCoordinates}
+              onLocationChange={setRouteCoordinates}
+            />
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
