@@ -16,19 +16,6 @@ type StopDetail = {
   amount: number | null;
 };
 
-type HistoryTicket = {
-  id: string;
-  userId: string;
-  routeNumber: string;
-  from: string;
-  to: string;
-  amount: number;
-  purchasedAt: string;
-  status: "completed";
-};
-
-const HISTORY_STORAGE_KEY = "ticketPurchaseHistory";
-
 const PurchaseTicketPage = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -302,7 +289,7 @@ const PurchaseTicketPage = () => {
     return name.toLowerCase().startsWith(query);
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (isSubmitting) return;
@@ -323,37 +310,16 @@ const PurchaseTicketPage = () => {
       return;
     }
 
-    const rawUser = window.localStorage.getItem("authUser");
-    const user = rawUser ? JSON.parse(rawUser) : null;
-    const userId =
-      (typeof user?.id === "string" && user.id.trim()) || "anonymous";
-
-    const newTicket: HistoryTicket = {
-      id: `TKT-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
-      userId,
-      routeNumber: route,
-      from,
-      to,
-      amount,
-      purchasedAt: new Date().toISOString(),
-      status: "completed",
-    };
-
-    let existingTickets: HistoryTicket[] = [];
-    try {
-      const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-      const parsed = raw ? (JSON.parse(raw) as HistoryTicket[]) : [];
-      existingTickets = Array.isArray(parsed) ? parsed : [];
-    } catch {
-      existingTickets = [];
-    }
-
     setIsSubmitting(true);
     try {
-      window.localStorage.setItem(
-        HISTORY_STORAGE_KEY,
-        JSON.stringify([newTicket, ...existingTickets])
-      );
+      await api.post("/tickets/purchase", {
+        route_number: route,
+        from_stop_name: from,
+        to_stop_name: to,
+        amount: amount.toFixed(2),
+        passenger_count: 1,
+        payment_method: "cash",
+      });
 
       dispatch(
         addNotification({
@@ -366,6 +332,14 @@ const PurchaseTicketPage = () => {
       setToValue("");
       setAmountValue("");
       setShowPurchaseComplete(true);
+    } catch {
+      dispatch(
+        addNotification({
+          id: `ticket-failed-${Date.now()}`,
+          message: "Purchase failed",
+          type: "error",
+        })
+      );
     } finally {
       setIsSubmitting(false);
     }

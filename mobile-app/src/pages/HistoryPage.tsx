@@ -1,38 +1,57 @@
 import { useEffect, useMemo, useState } from "react";
 import MobileShell from "../layout/MobileShell";
+import api from "../utils/axios";
 
 type HistoryTicket = {
   id: string;
-  userId: string;
+  ticketNumber: string;
   routeNumber: string;
   from: string;
   to: string;
   amount: number;
   purchasedAt: string;
-  status: "completed";
+  status: string;
 };
-
-const HISTORY_STORAGE_KEY = "ticketPurchaseHistory";
 
 const HistoryPage = () => {
   const [search, setSearch] = useState("");
   const [tickets, setTickets] = useState<HistoryTicket[]>([]);
 
   useEffect(() => {
-    const rawUser = window.localStorage.getItem("authUser");
-    const user = rawUser ? JSON.parse(rawUser) : null;
-    const currentUserId =
-      (typeof user?.id === "string" && user.id.trim()) || "anonymous";
+    const loadHistory = async () => {
+      try {
+        const response = await api.get("/tickets/user/me", {
+          params: { page: 1, limit: 100 },
+        });
+        const backendTickets = Array.isArray(response.data?.tickets)
+          ? response.data.tickets
+          : [];
 
-    try {
-      const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-      const parsed = raw ? (JSON.parse(raw) as HistoryTicket[]) : [];
-      const list = Array.isArray(parsed) ? parsed : [];
-      const userTickets = list.filter((ticket) => ticket.userId === currentUserId);
-      setTickets(userTickets);
-    } catch {
-      setTickets([]);
-    }
+        const mapped: HistoryTicket[] = backendTickets.map((ticket: any) => {
+          const rawAmount =
+            typeof ticket.amount === "number"
+              ? ticket.amount
+              : Number.parseFloat(ticket.amount || "0");
+
+          return {
+            id: ticket.id || "",
+            ticketNumber: ticket.ticket_number || ticket.id || "",
+            routeNumber: ticket.route_number || ticket.routeNumber || "",
+            from: ticket.from_stop_name || ticket.from || "-",
+            to: ticket.to_stop_name || ticket.to || "-",
+            amount: Number.isNaN(rawAmount) ? 0 : rawAmount,
+            purchasedAt: ticket.purchase_date || ticket.purchasedAt || new Date().toISOString(),
+            status: ticket.status || "completed",
+          };
+        });
+
+        setTickets(mapped);
+      } catch {
+        setTickets([]);
+      }
+    };
+
+    loadHistory();
   }, []);
 
   const filteredTickets = useMemo(() => {
@@ -78,7 +97,7 @@ const HistoryPage = () => {
                   className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] text-slate-400">{ticket.id}</p>
+                    <p className="text-[11px] text-slate-400">{ticket.ticketNumber}</p>
                     <p className="text-[11px] text-slate-400">
                       {new Date(ticket.purchasedAt).toLocaleString()}
                     </p>
@@ -97,7 +116,7 @@ const HistoryPage = () => {
                       LKR {ticket.amount.toFixed(2)}
                     </span>
                     <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
-                      Completed
+                      {ticket.status}
                     </span>
                   </div>
                 </article>

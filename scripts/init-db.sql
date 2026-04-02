@@ -56,7 +56,7 @@ CREATE TABLE stops (
 
 -- Tickets table
 CREATE TABLE tickets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_number VARCHAR(9) PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   route_id UUID NOT NULL REFERENCES routes(id) ON DELETE SET NULL,
   from_stop_id UUID REFERENCES stops(id) ON DELETE SET NULL,
@@ -73,7 +73,7 @@ CREATE TABLE tickets (
 CREATE TABLE transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  ticket_id UUID REFERENCES tickets(id) ON DELETE SET NULL,
+  ticket_id VARCHAR(9) REFERENCES tickets(ticket_number) ON DELETE SET NULL,
   amount DECIMAL(10, 2) NOT NULL,
   transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   payment_method VARCHAR(50),

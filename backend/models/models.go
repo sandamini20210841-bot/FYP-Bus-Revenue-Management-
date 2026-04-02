@@ -29,7 +29,7 @@ type PasswordResetToken struct {
 
 // Ticket represents a purchased bus ticket
 type Ticket struct {
-	ID           string    `json:"id"`
+	TicketNumber string    `json:"ticket_number"`
 	UserID       string    `json:"user_id"`
 	RouteID      string    `json:"route_id"`
 	FromStopID   string    `json:"from_stop_id"`
