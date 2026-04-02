@@ -64,6 +64,8 @@ const ReportsPage: React.FC = () => {
         id: `export-all-${Date.now()}`,
         type: "info",
         message: "Exporting all transactions (not yet implemented)",
+        timestamp: new Date().toISOString(),
+        read: false,
       })
     );
 
@@ -83,6 +85,8 @@ const ReportsPage: React.FC = () => {
         id: `export-today-${Date.now()}`,
         type: "info",
         message: "Exporting today\'s transactions (not yet implemented)",
+        timestamp: new Date().toISOString(),
+        read: false,
       })
     );
 
@@ -125,6 +129,8 @@ const ReportsPage: React.FC = () => {
         id: `export-custom-${Date.now()}`,
         type: "info",
         message: "Exporting custom range (not yet implemented)",
+        timestamp: new Date().toISOString(),
+        read: false,
       })
     );
 
@@ -173,7 +179,7 @@ const ReportsPage: React.FC = () => {
               </span>
               <input
                 type="text"
-                placeholder="Search by ticket, route, or location..."
+                placeholder="Search by ticket, route, start, or end destination..."
                 className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -391,17 +397,17 @@ const ReportsPage: React.FC = () => {
                 <th className="py-2 pr-4 font-semibold">Date</th>
                 <th className="py-2 pr-4 font-semibold">Time</th>
                 <th className="py-2 pr-4 font-semibold">Amount</th>
-                <th className="py-2 pr-0 font-semibold">Location</th>
+                <th className="py-2 pr-4 font-semibold">Start Destination</th>
+                <th className="py-2 pr-0 font-semibold">End Destination</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="py-6 text-center text-[11px] text-slate-400"
                 >
-                  Transaction data will appear here once ticket purchases are
-                  recorded.
+                  Transaction data will appear here once the tickets are purchased.
                 </td>
               </tr>
             </tbody>

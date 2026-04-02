@@ -76,7 +76,7 @@ func GenerateTicketSalesReport(c *fiber.Ctx) error {
 	}
 
 	// TODO: Query tickets in date range
-	// TODO: Include ticket_id, date, route_id, stop, amount
+	// TODO: Include ticket_id, date, route_id, from_stop_id, to_stop_id, amount
 	// TODO: Apply filters
 	// TODO: Generate report data
 	// TODO: Save to database
