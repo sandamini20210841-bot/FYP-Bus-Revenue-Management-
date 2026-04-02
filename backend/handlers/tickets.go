@@ -306,6 +306,7 @@ func GetUserTickets(c *fiber.Ctx) error {
 	rows, err := database.Query(
 		`SELECT
 			 t.ticket_number,
+			 COALESCE(t.qr_code_hash, ''),
 			 t.route_id,
 			 COALESCE(r.route_number, ''),
 			 t.from_stop_id,
@@ -336,6 +337,7 @@ func GetUserTickets(c *fiber.Ctx) error {
 	tickets := []fiber.Map{}
 	for rows.Next() {
 		var ticketNumber sql.NullString
+		var qrCodeHash string
 		var routeID string
 		var routeNumber string
 		var fromStopID sql.NullString
@@ -348,6 +350,7 @@ func GetUserTickets(c *fiber.Ctx) error {
 
 		if err := rows.Scan(
 			&ticketNumber,
+			&qrCodeHash,
 			&routeID,
 			&routeNumber,
 			&fromStopID,
@@ -364,6 +367,7 @@ func GetUserTickets(c *fiber.Ctx) error {
 		tickets = append(tickets, fiber.Map{
 			"id":             ticketNumber.String,
 			"ticket_number":  ticketNumber.String,
+			"qr_code_hash":   qrCodeHash,
 			"route_id":       routeID,
 			"route_number":   routeNumber,
 			"from_stop_id":   fromStopID.String,
@@ -461,13 +465,232 @@ func ValidateTicket(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Query ticket by QR code or ticket ID
-	// TODO: Verify ticket is valid and not expired
-	// TODO: Check if ticket is active
-	// TODO: Return validation result
+	ticketNumber, qrHash := parseTicketValidationInput(strings.TrimSpace(req.TicketID), strings.TrimSpace(req.QRCode))
+
+	if ticketNumber == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "ticket_id or qr_code with ticket_number is required",
+		})
+	}
+
+	validatedTicket, statusCode, errMessage, err := getValidatedTicketDetails(ticketNumber, qrHash)
+	if err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"valid": false,
+			"error": "Ticket not found",
+		})
+	}
+	if err != nil {
+		return c.Status(statusCode).JSON(fiber.Map{
+			"valid": false,
+			"error": errMessage,
+		})
+	}
+
+	isValid := strings.EqualFold(validatedTicket.Status, "active")
+	message := "Ticket is valid"
+	if !isValid {
+		message = "Ticket is not active"
+	}
 
 	return c.JSON(fiber.Map{
-		"valid": true,
-		"ticketDetails": fiber.Map{},
+		"valid":   isValid,
+		"message": message,
+		"ticketDetails": fiber.Map{
+			"ticket_number":      validatedTicket.TicketNumber,
+			"route":              validatedTicket.RouteNumber,
+			"start_destination":  validatedTicket.FromStopName,
+			"end_destination":    validatedTicket.ToStopName,
+			"amount":             validatedTicket.Amount,
+			"purchase_date_time": validatedTicket.PurchaseDate,
+			"status":             validatedTicket.Status,
+		},
 	})
+}
+
+// PublicValidateTicket validates a ticket through URL query params for camera-scanned QR links.
+func PublicValidateTicket(c *fiber.Ctx) error {
+	ticketNumber, qrHash := parseTicketValidationInput(
+		strings.TrimSpace(c.Query("ticket_number")),
+		strings.TrimSpace(c.Query("qr_code")),
+	)
+	if ticketNumber == "" {
+		ticketNumber, qrHash = parseTicketValidationInput(
+			strings.TrimSpace(c.Query("ticket_id")),
+			"",
+		)
+		if qrHash == "" {
+			qrHash = strings.TrimSpace(c.Query("qr_hash"))
+		}
+	}
+
+	if ticketNumber == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"valid": false,
+			"error": "ticket_number is required",
+		})
+	}
+
+	validatedTicket, statusCode, errMessage, err := getValidatedTicketDetails(ticketNumber, qrHash)
+	if err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).SendString("<h2>Ticket not found</h2>")
+	}
+	if err != nil {
+		if strings.Contains(c.Get("Accept"), "text/html") {
+			return c.Status(statusCode).SendString("<h2>Ticket validation failed</h2>")
+		}
+		return c.Status(statusCode).JSON(fiber.Map{
+			"valid": false,
+			"error": errMessage,
+		})
+	}
+
+	isValid := strings.EqualFold(validatedTicket.Status, "active")
+	if strings.Contains(c.Get("Accept"), "text/html") {
+		statusLabel := "VALID"
+		if !isValid {
+			statusLabel = "NOT ACTIVE"
+		}
+
+		html := fmt.Sprintf(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ticket Validation</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f7fb; margin: 0; padding: 16px; color: #1f2937; }
+    .card { max-width: 560px; margin: 24px auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
+    .status { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+    .ok { background: #dcfce7; color: #166534; }
+    .bad { background: #fee2e2; color: #991b1b; }
+    .row { margin-top: 10px; font-size: 14px; }
+    .k { color: #6b7280; }
+    .v { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 style="margin:0 0 8px;">Ticket Details</h2>
+    <span class="status %s">%s</span>
+    <div class="row"><span class="k">Ticket Number:</span> <span class="v">%s</span></div>
+    <div class="row"><span class="k">Route:</span> <span class="v">%s</span></div>
+    <div class="row"><span class="k">Start Destination:</span> <span class="v">%s</span></div>
+    <div class="row"><span class="k">End Destination:</span> <span class="v">%s</span></div>
+    <div class="row"><span class="k">Amount:</span> <span class="v">LKR %.2f</span></div>
+    <div class="row"><span class="k">Purchase Date & Time:</span> <span class="v">%s</span></div>
+    <div class="row"><span class="k">Status:</span> <span class="v">%s</span></div>
+  </div>
+</body>
+</html>`,
+			map[bool]string{true: "ok", false: "bad"}[isValid],
+			statusLabel,
+			validatedTicket.TicketNumber,
+			validatedTicket.RouteNumber,
+			validatedTicket.FromStopName,
+			validatedTicket.ToStopName,
+			validatedTicket.Amount,
+			validatedTicket.PurchaseDate.Format("2006-01-02 15:04:05"),
+			validatedTicket.Status,
+		)
+
+		c.Type("html")
+		return c.SendString(html)
+	}
+
+	return c.JSON(fiber.Map{
+		"valid": isValid,
+		"ticketDetails": fiber.Map{
+			"ticket_number":      validatedTicket.TicketNumber,
+			"route":              validatedTicket.RouteNumber,
+			"start_destination":  validatedTicket.FromStopName,
+			"end_destination":    validatedTicket.ToStopName,
+			"amount":             validatedTicket.Amount,
+			"purchase_date_time": validatedTicket.PurchaseDate,
+			"status":             validatedTicket.Status,
+		},
+	})
+}
+
+type validatedTicketDetails struct {
+	TicketNumber string
+	RouteNumber  string
+	FromStopName string
+	ToStopName   string
+	Amount       float64
+	PurchaseDate time.Time
+	Status       string
+	DBQRHash     string
+}
+
+func parseTicketValidationInput(initialTicketNumber string, rawQRCode string) (string, string) {
+	ticketNumber := strings.TrimSpace(initialTicketNumber)
+	qrHash := ""
+
+	if raw := strings.TrimSpace(rawQRCode); raw != "" {
+		parts := strings.Split(raw, ";")
+		for _, part := range parts {
+			kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+			if len(kv) != 2 {
+				continue
+			}
+			key := strings.ToLower(strings.TrimSpace(kv[0]))
+			value := strings.TrimSpace(kv[1])
+			switch key {
+			case "ticket_number", "ticket", "ticket_id":
+				if value != "" {
+					ticketNumber = value
+				}
+			case "qr_hash", "qr", "hash":
+				if value != "" {
+					qrHash = value
+				}
+			}
+		}
+	}
+
+	return ticketNumber, qrHash
+}
+
+func getValidatedTicketDetails(ticketNumber string, qrHash string) (validatedTicketDetails, int, string, error) {
+	var details validatedTicketDetails
+
+	err := database.QueryRow(
+		`SELECT
+			 t.ticket_number,
+			 COALESCE(r.route_number, ''),
+			 COALESCE(fs.stop_name, ''),
+			 COALESCE(ts.stop_name, ''),
+			 t.amount,
+			 t.purchase_date,
+			 t.status,
+			 COALESCE(t.qr_code_hash, '')
+		 FROM tickets t
+		 LEFT JOIN routes r ON r.id = t.route_id
+		 LEFT JOIN stops fs ON fs.id = t.from_stop_id
+		 LEFT JOIN stops ts ON ts.id = t.to_stop_id
+		 WHERE t.ticket_number = $1`,
+		ticketNumber,
+	).Scan(
+		&details.TicketNumber,
+		&details.RouteNumber,
+		&details.FromStopName,
+		&details.ToStopName,
+		&details.Amount,
+		&details.PurchaseDate,
+		&details.Status,
+		&details.DBQRHash,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return validatedTicketDetails{}, fiber.StatusNotFound, "Ticket not found", err
+		}
+		return validatedTicketDetails{}, fiber.StatusInternalServerError, "Failed to validate ticket", err
+	}
+
+	if qrHash != "" && details.DBQRHash != "" && qrHash != details.DBQRHash {
+		return validatedTicketDetails{}, fiber.StatusUnauthorized, "Invalid QR code", errors.New("invalid qr code")
+	}
+
+	return details, fiber.StatusOK, "", nil
 }

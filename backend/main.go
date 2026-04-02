@@ -66,6 +66,10 @@ func main() {
 	auth.Post("/forgot-password", handlers.ForgotPassword)
 	auth.Post("/reset-password", handlers.ResetPassword)
 
+	// Public ticket validation route for QR camera scans
+	ticketsPublic := api.Group("/tickets/public")
+	ticketsPublic.Get("/validate", handlers.PublicValidateTicket)
+
 	// Protected routes
 	protected := api.Group("")
 	protected.Use(middleware.AuthRequired())
