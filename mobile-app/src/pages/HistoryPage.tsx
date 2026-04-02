@@ -87,7 +87,10 @@ const HistoryPage = () => {
                     Route {ticket.routeNumber}
                   </p>
                   <p className="mt-1 text-xs text-slate-300">
-                    {ticket.from}{" -> "}{ticket.to}
+                    Start destination: {ticket.from}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    End destination: {ticket.to}
                   </p>
                   <div className="mt-2 flex items-center justify-between text-xs">
                     <span className="text-emerald-300">

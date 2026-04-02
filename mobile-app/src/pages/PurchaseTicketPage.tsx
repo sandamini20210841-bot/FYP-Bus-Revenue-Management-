@@ -48,6 +48,7 @@ const PurchaseTicketPage = () => {
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPurchaseComplete, setShowPurchaseComplete] = useState(false);
   const [locationState, setLocationState] = useState<LocationState>({
     status: "idle",
   });
@@ -364,7 +365,7 @@ const PurchaseTicketPage = () => {
 
       setToValue("");
       setAmountValue("");
-      navigate("/tickets/history");
+      setShowPurchaseComplete(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -562,6 +563,39 @@ const PurchaseTicketPage = () => {
             {isSubmitting ? "PROCESSING..." : "BUY TICKET"}
           </button>
         </form>
+
+        {showPurchaseComplete && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-4">
+            <div className="w-full max-w-[280px] rounded-2xl border border-slate-700 bg-slate-900 px-5 py-6 text-center shadow-xl">
+              <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-7 w-7"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-white">Purchase complete</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPurchaseComplete(false);
+                  navigate("/tickets/history");
+                }}
+                className="mt-3 inline-flex items-center justify-center text-xs font-medium text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
+              >
+                Show History
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </MobileShell>
   );
