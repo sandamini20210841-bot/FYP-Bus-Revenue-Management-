@@ -12,6 +12,7 @@ import SessionManager from "./components/SessionManager";
 import RegisterPage from "./pages/RegisterPage";
 import LoginPage from "./pages/LoginPage";
 import PurchaseTicketPage from "./pages/PurchaseTicketPage";
+import HistoryPage from "./pages/HistoryPage";
 import ProfilePage from "./pages/ProfilePage";
 import EditProfilePage from "./pages/EditProfilePage";
 import SettingsPage from "./pages/SettingsPage";
@@ -47,7 +48,7 @@ function App() {
             path="/tickets/history"
             element={
               <RequireAuth>
-                <div>Ticket History Page</div>
+                <HistoryPage />
               </RequireAuth>
             }
           />

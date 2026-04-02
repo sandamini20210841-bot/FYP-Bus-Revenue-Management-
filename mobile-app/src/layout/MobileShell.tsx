@@ -31,7 +31,7 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="mr-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 text-slate-200 hover:bg-slate-800/80 focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
+            className="mr-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white bg-white text-slate-900 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70"
             aria-label="Go back"
           >
             <svg
@@ -63,7 +63,7 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
         <button
           type="button"
           onClick={() => setMenuOpen((prev) => !prev)}
-          className="ml-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 text-slate-200 shadow-sm hover:bg-slate-800/80 focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
+          className="ml-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white bg-white text-slate-900 shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70"
           aria-label="Open menu"
         >
           <svg
@@ -125,6 +125,34 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
                   </svg>
                 </span>
                 <span>Purchase ticket</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  navigate("/tickets/history");
+                  setMenuOpen(false);
+                }}
+                className="flex w-full items-center rounded-lg px-3 py-2 text-slate-100 hover:bg-slate-800/80"
+              >
+                <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-emerald-400">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 4h18" />
+                    <path d="M3 10h18" />
+                    <path d="M3 16h18" />
+                    <path d="M3 22h18" />
+                  </svg>
+                </span>
+                <span>History</span>
               </button>
 
               <button

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../utils/axios";
 import MobileShell from "../layout/MobileShell";
+import { useAppDispatch } from "../hooks/useAppHooks";
+import { addNotification } from "../store/slices/uiSlice";
 
 type LocationState =
   | { status: "idle" }
@@ -13,7 +16,22 @@ type StopDetail = {
   amount: number | null;
 };
 
+type HistoryTicket = {
+  id: string;
+  userId: string;
+  routeNumber: string;
+  from: string;
+  to: string;
+  amount: number;
+  purchasedAt: string;
+  status: "completed";
+};
+
+const HISTORY_STORAGE_KEY = "ticketPurchaseHistory";
+
 const PurchaseTicketPage = () => {
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const [busNumber, setBusNumber] = useState("");
   const [fromValue, setFromValue] = useState("");
   const [toValue, setToValue] = useState("");
@@ -29,6 +47,7 @@ const PurchaseTicketPage = () => {
   const [showBusDropdown, setShowBusDropdown] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [locationState, setLocationState] = useState<LocationState>({
     status: "idle",
   });
@@ -284,14 +303,71 @@ const PurchaseTicketPage = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // For now this is just a UI flow; backend purchase integration can be added later.
-    alert(
-      `Ticket purchase requested on bus ${
-        busNumber || "(bus)"
-      } from ${fromValue || "(from)"} to ${
-        toValue || "(to)"
-      } for amount ${amountValue || "(amount)"}`
-    );
+
+    if (isSubmitting) return;
+
+    const route = busNumber.trim();
+    const from = fromValue.trim();
+    const to = toValue.trim();
+    const amount = Number.parseFloat(amountValue);
+
+    if (!route || !from || !to || Number.isNaN(amount)) {
+      dispatch(
+        addNotification({
+          id: `ticket-invalid-${Date.now()}`,
+          message: "Select route, stops, and amount",
+          type: "error",
+        })
+      );
+      return;
+    }
+
+    const rawUser = window.localStorage.getItem("authUser");
+    const user = rawUser ? JSON.parse(rawUser) : null;
+    const userId =
+      (typeof user?.id === "string" && user.id.trim()) || "anonymous";
+
+    const newTicket: HistoryTicket = {
+      id: `TKT-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
+      userId,
+      routeNumber: route,
+      from,
+      to,
+      amount,
+      purchasedAt: new Date().toISOString(),
+      status: "completed",
+    };
+
+    let existingTickets: HistoryTicket[] = [];
+    try {
+      const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as HistoryTicket[]) : [];
+      existingTickets = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      existingTickets = [];
+    }
+
+    setIsSubmitting(true);
+    try {
+      window.localStorage.setItem(
+        HISTORY_STORAGE_KEY,
+        JSON.stringify([newTicket, ...existingTickets])
+      );
+
+      dispatch(
+        addNotification({
+          id: `ticket-success-${Date.now()}`,
+          message: "Ticket purchased",
+          type: "success",
+        })
+      );
+
+      setToValue("");
+      setAmountValue("");
+      navigate("/tickets/history");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -480,9 +556,10 @@ const PurchaseTicketPage = () => {
 
           <button
             type="submit"
-            className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-4 py-2.5 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:ring-offset-0 disabled:opacity-60"
+            disabled={isSubmitting}
+            className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-white bg-white px-4 py-2.5 text-xs font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70 focus:ring-offset-0 disabled:opacity-60"
           >
-            Continue
+            {isSubmitting ? "PROCESSING..." : "BUY TICKET"}
           </button>
         </form>
       </main>
