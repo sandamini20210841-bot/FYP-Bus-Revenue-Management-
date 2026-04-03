@@ -1,7 +1,19 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../store";
 import { addNotification } from "../store/slices/alertsSlice";
+import api from "../utils/axios";
+
+type ReportTransaction = {
+  id: string;
+  route_number: string;
+  ticket_number: string;
+  transaction_date: string;
+  amount: number;
+  from_stop_name: string;
+  to_stop_name: string;
+  status: string;
+};
 
 const ReportsPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -17,6 +29,9 @@ const ReportsPage: React.FC = () => {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [customDateError, setCustomDateError] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<ReportTransaction[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
 
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const routeDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -48,6 +63,99 @@ const ReportsPage: React.FC = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isExportMenuOpen, isRouteOpen, isDateOpen]);
+
+  useEffect(() => {
+    const loadTransactions = async () => {
+      setIsLoadingTransactions(true);
+      setTransactionsError(null);
+      try {
+        const response = await api.get("/transactions", {
+          params: {
+            page: 1,
+            limit: 200,
+            status: "completed",
+          },
+        });
+
+        const rows = Array.isArray(response.data?.transactions)
+          ? response.data.transactions
+          : [];
+
+        const mapped: ReportTransaction[] = rows.map((row: any) => ({
+          id: row.id || "",
+          route_number: row.route_number || "-",
+          ticket_number: row.ticket_number || "-",
+          transaction_date: row.transaction_date || "",
+          amount: typeof row.amount === "number" ? row.amount : Number.parseFloat(row.amount || "0"),
+          from_stop_name: row.from_stop_name || "-",
+          to_stop_name: row.to_stop_name || "-",
+          status: row.status || "",
+        }));
+
+        setTransactions(mapped);
+      } catch {
+        setTransactions([]);
+        setTransactionsError("Failed to load transactions.");
+      } finally {
+        setIsLoadingTransactions(false);
+      }
+    };
+
+    void loadTransactions();
+  }, []);
+
+  const routeOptions = useMemo(() => {
+    const routes = new Set<string>();
+    transactions.forEach((tr) => {
+      if (tr.route_number && tr.route_number !== "-") {
+        routes.add(tr.route_number);
+      }
+    });
+    return Array.from(routes).sort();
+  }, [transactions]);
+
+  const filteredTransactions = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    const now = new Date();
+
+    return transactions.filter((tr) => {
+      if (routeFilter !== "all" && tr.route_number !== routeFilter) {
+        return false;
+      }
+
+      const trDate = tr.transaction_date ? new Date(tr.transaction_date) : null;
+      if (trDate && !Number.isNaN(trDate.getTime())) {
+        if (dateFilter === "today") {
+          const sameDay =
+            trDate.getFullYear() === now.getFullYear() &&
+            trDate.getMonth() === now.getMonth() &&
+            trDate.getDate() === now.getDate();
+          if (!sameDay) return false;
+        }
+
+        if (dateFilter === "last7") {
+          const from = new Date(now);
+          from.setDate(now.getDate() - 7);
+          if (trDate < from) return false;
+        }
+
+        if (dateFilter === "last30") {
+          const from = new Date(now);
+          from.setDate(now.getDate() - 30);
+          if (trDate < from) return false;
+        }
+      }
+
+      if (!term) return true;
+
+      return (
+        tr.ticket_number.toLowerCase().includes(term) ||
+        tr.route_number.toLowerCase().includes(term) ||
+        tr.from_stop_name.toLowerCase().includes(term) ||
+        tr.to_stop_name.toLowerCase().includes(term)
+      );
+    });
+  }, [transactions, searchQuery, routeFilter, dateFilter]);
 
   const closeExportMenu = () => {
     setIsExportMenuOpen(false);
@@ -199,7 +307,7 @@ const ReportsPage: React.FC = () => {
                 className="w-full inline-flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none transition-colors duration-150 ease-out focus:border-blue-500 focus:bg-blue-50/40"
               >
                 <span>
-                  {routeFilter === "all" ? "All routes" : "All routes"}
+                  {routeFilter === "all" ? "All routes" : routeFilter}
                 </span>
                 <span className="text-slate-400 flex items-center">
                   <svg
@@ -236,7 +344,23 @@ const ReportsPage: React.FC = () => {
                   >
                     All routes
                   </button>
-                  {/* TODO: populate routes from backend and render here */}
+                  {routeOptions.map((route) => (
+                    <button
+                      key={route}
+                      type="button"
+                      onClick={() => {
+                        setRouteFilter(route);
+                        setIsRouteOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs transition-colors duration-100 ${
+                        routeFilter === route
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {route}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -402,14 +526,60 @@ const ReportsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td
-                  colSpan={7}
-                  className="py-6 text-center text-[11px] text-slate-400"
-                >
-                  Transaction data will appear here once the tickets are purchased.
-                </td>
-              </tr>
+              {isLoadingTransactions && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-6 text-center text-[11px] text-slate-400"
+                  >
+                    Loading transactions...
+                  </td>
+                </tr>
+              )}
+
+              {!isLoadingTransactions && transactionsError && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-6 text-center text-[11px] text-red-500"
+                  >
+                    {transactionsError}
+                  </td>
+                </tr>
+              )}
+
+              {!isLoadingTransactions && !transactionsError && filteredTransactions.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-6 text-center text-[11px] text-slate-400"
+                  >
+                    Transaction data will appear here once tickets are purchased.
+                  </td>
+                </tr>
+              )}
+
+              {!isLoadingTransactions && !transactionsError && filteredTransactions.map((tr) => {
+                const dt = tr.transaction_date ? new Date(tr.transaction_date) : null;
+                const dateLabel = dt && !Number.isNaN(dt.getTime())
+                  ? dt.toLocaleDateString()
+                  : "-";
+                const timeLabel = dt && !Number.isNaN(dt.getTime())
+                  ? dt.toLocaleTimeString()
+                  : "-";
+
+                return (
+                  <tr key={tr.id} className="border-b border-slate-100 last:border-b-0">
+                    <td className="py-3 pr-4">{tr.route_number || "-"}</td>
+                    <td className="py-3 pr-4">{tr.ticket_number || "-"}</td>
+                    <td className="py-3 pr-4">{dateLabel}</td>
+                    <td className="py-3 pr-4">{timeLabel}</td>
+                    <td className="py-3 pr-4">LKR {Number(tr.amount || 0).toFixed(2)}</td>
+                    <td className="py-3 pr-4">{tr.from_stop_name || "-"}</td>
+                    <td className="py-3 pr-0">{tr.to_stop_name || "-"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
