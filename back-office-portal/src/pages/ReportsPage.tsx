@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../store";
 import { addNotification } from "../store/slices/alertsSlice";
@@ -37,6 +37,58 @@ const ReportsPage: React.FC = () => {
   const routeDropdownRef = useRef<HTMLDivElement | null>(null);
   const dateDropdownRef = useRef<HTMLDivElement | null>(null);
 
+  const formatCsvField = (value: string | number) => {
+    const text = String(value ?? "");
+    if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
+      return `"${text.replace(/\"/g, '""')}"`;
+    }
+    return text;
+  };
+
+  const downloadTransactionsCsv = (fileName: string, rows: ReportTransaction[]) => {
+    const header = [
+      "Route",
+      "Ticket Number",
+      "Date",
+      "Time",
+      "Amount (LKR)",
+      "Start Destination",
+      "End Destination",
+      "Status",
+    ];
+
+    const body = rows.map((tr) => {
+      const dt = tr.transaction_date ? new Date(tr.transaction_date) : null;
+      const dateLabel = dt && !Number.isNaN(dt.getTime()) ? dt.toLocaleDateString() : "";
+      const timeLabel = dt && !Number.isNaN(dt.getTime()) ? dt.toLocaleTimeString() : "";
+
+      return [
+        tr.route_number || "",
+        tr.ticket_number || "",
+        dateLabel,
+        timeLabel,
+        Number(tr.amount || 0).toFixed(2),
+        tr.from_stop_name || "",
+        tr.to_stop_name || "",
+        tr.status || "",
+      ]
+        .map(formatCsvField)
+        .join(",");
+    });
+
+    const csvText = [header.join(","), ...body].join("\n");
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     if (!isExportMenuOpen && !isRouteOpen && !isDateOpen) return;
 
@@ -64,45 +116,53 @@ const ReportsPage: React.FC = () => {
     };
   }, [isExportMenuOpen, isRouteOpen, isDateOpen]);
 
-  useEffect(() => {
-    const loadTransactions = async () => {
-      setIsLoadingTransactions(true);
-      setTransactionsError(null);
-      try {
-        const response = await api.get("/transactions", {
-          params: {
-            page: 1,
-            limit: 200,
-            status: "completed",
-          },
-        });
+  const loadTransactions = useCallback(async () => {
+    setIsLoadingTransactions(true);
+    setTransactionsError(null);
+    try {
+      const response = await api.get("/transactions", {
+        params: {
+          page: 1,
+          limit: 200,
+          status: "completed",
+        },
+      });
 
-        const rows = Array.isArray(response.data?.transactions)
-          ? response.data.transactions
-          : [];
+      const rows = Array.isArray(response.data?.transactions)
+        ? response.data.transactions
+        : [];
 
-        const mapped: ReportTransaction[] = rows.map((row: any) => ({
-          id: row.id || "",
-          route_number: row.route_number || "-",
-          ticket_number: row.ticket_number || "-",
-          transaction_date: row.transaction_date || "",
-          amount: typeof row.amount === "number" ? row.amount : Number.parseFloat(row.amount || "0"),
-          from_stop_name: row.from_stop_name || "-",
-          to_stop_name: row.to_stop_name || "-",
-          status: row.status || "",
-        }));
+      const mapped: ReportTransaction[] = rows.map((row: any) => ({
+        id: row.id || "",
+        route_number: row.route_number || "-",
+        ticket_number: row.ticket_number || "-",
+        transaction_date: row.transaction_date || "",
+        amount: typeof row.amount === "number" ? row.amount : Number.parseFloat(row.amount || "0"),
+        from_stop_name: row.from_stop_name || "-",
+        to_stop_name: row.to_stop_name || "-",
+        status: row.status || "",
+      }));
 
-        setTransactions(mapped);
-      } catch {
-        setTransactions([]);
-        setTransactionsError("Failed to load transactions.");
-      } finally {
-        setIsLoadingTransactions(false);
-      }
-    };
-
-    void loadTransactions();
+      setTransactions(mapped);
+    } catch {
+      setTransactions([]);
+      setTransactionsError("Failed to load transactions.");
+    } finally {
+      setIsLoadingTransactions(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadTransactions();
+
+    const intervalId = window.setInterval(() => {
+      void loadTransactions();
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [loadTransactions]);
 
   const routeOptions = useMemo(() => {
     const routes = new Set<string>();
@@ -157,6 +217,12 @@ const ReportsPage: React.FC = () => {
     });
   }, [transactions, searchQuery, routeFilter, dateFilter]);
 
+  const visibleTransactionCount = filteredTransactions.length;
+  const visibleTransactionTotal = filteredTransactions.reduce(
+    (sum, tr) => sum + Number(tr.amount || 0),
+    0
+  );
+
   const closeExportMenu = () => {
     setIsExportMenuOpen(false);
   };
@@ -166,16 +232,29 @@ const ReportsPage: React.FC = () => {
     closeExportMenu();
     setIsExporting(true);
 
-    // TODO: Call backend export for all transactions
-    dispatch(
-      addNotification({
-        id: `export-all-${Date.now()}`,
-        type: "info",
-        message: "Exporting all transactions (not yet implemented)",
-        timestamp: new Date().toISOString(),
-        read: false,
-      })
-    );
+    try {
+      const timestamp = new Date().toISOString().slice(0, 10);
+      downloadTransactionsCsv(`transactions-all-${timestamp}.csv`, filteredTransactions);
+      dispatch(
+        addNotification({
+          id: `export-all-${Date.now()}`,
+          type: "success",
+          message: `Exported ${filteredTransactions.length} transactions`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
+    } catch {
+      dispatch(
+        addNotification({
+          id: `export-all-error-${Date.now()}`,
+          type: "error",
+          message: "Failed to export transactions",
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
+    }
 
     setTimeout(() => {
       setIsExporting(false);
@@ -187,16 +266,40 @@ const ReportsPage: React.FC = () => {
     closeExportMenu();
     setIsExporting(true);
 
-    // TODO: Call backend export for today's transactions
-    dispatch(
-      addNotification({
-        id: `export-today-${Date.now()}`,
-        type: "info",
-        message: "Exporting today\'s transactions (not yet implemented)",
-        timestamp: new Date().toISOString(),
-        read: false,
-      })
-    );
+    try {
+      const now = new Date();
+      const todaysRows = filteredTransactions.filter((tr) => {
+        const dt = tr.transaction_date ? new Date(tr.transaction_date) : null;
+        if (!dt || Number.isNaN(dt.getTime())) return false;
+        return (
+          dt.getFullYear() === now.getFullYear() &&
+          dt.getMonth() === now.getMonth() &&
+          dt.getDate() === now.getDate()
+        );
+      });
+
+      const timestamp = new Date().toISOString().slice(0, 10);
+      downloadTransactionsCsv(`${timestamp} transactions report.csv`, todaysRows);
+      dispatch(
+        addNotification({
+          id: `export-today-${Date.now()}`,
+          type: "success",
+          message: `Exported ${todaysRows.length} today transactions`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
+    } catch {
+      dispatch(
+        addNotification({
+          id: `export-today-error-${Date.now()}`,
+          type: "error",
+          message: "Failed to export today transactions",
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
+    }
 
     setTimeout(() => {
       setIsExporting(false);
@@ -205,6 +308,8 @@ const ReportsPage: React.FC = () => {
 
   const openCustomRange = () => {
     closeExportMenu();
+    setCustomStartDate("");
+    setCustomEndDate("");
     setCustomDateError(null);
     setIsCustomRangeOpen(true);
   };
@@ -212,6 +317,8 @@ const ReportsPage: React.FC = () => {
   const handleCloseCustomRange = () => {
     if (isExporting) return;
     setIsCustomRangeOpen(false);
+    setCustomStartDate("");
+    setCustomEndDate("");
     setCustomDateError(null);
   };
 
@@ -231,16 +338,54 @@ const ReportsPage: React.FC = () => {
     setCustomDateError(null);
     setIsExporting(true);
 
-    // TODO: Call backend export with custom date range
-    dispatch(
-      addNotification({
-        id: `export-custom-${Date.now()}`,
-        type: "info",
-        message: "Exporting custom range (not yet implemented)",
-        timestamp: new Date().toISOString(),
-        read: false,
-      })
-    );
+    try {
+      const start = new Date(`${customStartDate}T00:00:00`);
+      const end = new Date(`${customEndDate}T23:59:59`);
+      const rowsInRange = filteredTransactions.filter((tr) => {
+        const dt = tr.transaction_date ? new Date(tr.transaction_date) : null;
+        if (!dt || Number.isNaN(dt.getTime())) return false;
+        return dt >= start && dt <= end;
+      });
+
+      if (rowsInRange.length === 0) {
+        dispatch(
+          addNotification({
+            id: `export-custom-empty-${Date.now()}`,
+            type: "error",
+            message: "Transaction data is not available for the selected date range.",
+            timestamp: new Date().toISOString(),
+            read: false,
+          })
+        );
+        setIsExporting(false);
+        return;
+      }
+
+      downloadTransactionsCsv(
+        `transactions-${customStartDate}-to-${customEndDate}.csv`,
+        rowsInRange
+      );
+
+      dispatch(
+        addNotification({
+          id: `export-custom-${Date.now()}`,
+          type: "success",
+          message: `Exported ${rowsInRange.length} transactions in custom range`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
+    } catch {
+      dispatch(
+        addNotification({
+          id: `export-custom-error-${Date.now()}`,
+          type: "error",
+          message: "Failed to export custom range",
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
+    }
 
     setTimeout(() => {
       setIsExporting(false);
@@ -581,6 +726,21 @@ const ReportsPage: React.FC = () => {
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-slate-200 bg-slate-100/70 text-sm text-slate-700">
+                <td className="py-3 pr-4" />
+                <td className="py-3 pr-4" />
+                <td className="py-3 pr-4" />
+                <td className="py-3 pr-4 font-semibold text-slate-700">Total:</td>
+                <td className="py-3 pr-4 font-bold text-emerald-600">
+                  Rs {visibleTransactionTotal.toFixed(2)}
+                </td>
+                <td className="py-3 pr-4" />
+                <td className="py-3 pr-0 text-slate-500">
+                  {visibleTransactionCount} transactions
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
