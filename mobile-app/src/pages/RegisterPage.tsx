@@ -45,8 +45,8 @@ const RegisterPage = () => {
       console.error("Registration failed", err);
       const axiosErr = err as AxiosError<{ error?: string }>;
       const backendMessage = axiosErr.response?.data?.error;
-      if (backendMessage === "this email already has an account") {
-        setError("this email already has an account");
+      if (backendMessage === "this email already registered in the platform") {
+        setError("this email already registered in the platform");
       } else if (backendMessage === "Access denied") {
         setError("Access denied");
       } else {

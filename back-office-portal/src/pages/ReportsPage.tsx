@@ -51,7 +51,7 @@ const ReportsPage: React.FC = () => {
       "Ticket Number",
       "Date",
       "Time",
-      "Amount (LKR)",
+      "Amount (Rs.)",
       "Start Destination",
       "End Destination",
       "Status",
@@ -719,7 +719,7 @@ const ReportsPage: React.FC = () => {
                     <td className="py-3 pr-4">{tr.ticket_number || "-"}</td>
                     <td className="py-3 pr-4">{dateLabel}</td>
                     <td className="py-3 pr-4">{timeLabel}</td>
-                    <td className="py-3 pr-4">LKR {Number(tr.amount || 0).toFixed(2)}</td>
+                    <td className="py-3 pr-4 text-emerald-600 font-semibold">Rs. {Number(tr.amount || 0).toFixed(2)}</td>
                     <td className="py-3 pr-4">{tr.from_stop_name || "-"}</td>
                     <td className="py-3 pr-0">{tr.to_stop_name || "-"}</td>
                   </tr>
@@ -733,7 +733,7 @@ const ReportsPage: React.FC = () => {
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-4 font-semibold text-slate-700">Total:</td>
                 <td className="py-3 pr-4 font-bold text-emerald-600">
-                  Rs {visibleTransactionTotal.toFixed(2)}
+                  Rs. {visibleTransactionTotal.toFixed(2)}
                 </td>
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-0 text-slate-500">

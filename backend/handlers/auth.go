@@ -141,7 +141,7 @@ func Register(c *fiber.Ctx) error {
 	err := database.QueryRow("SELECT id FROM users WHERE email = $1", req.Email).Scan(&existingID)
 	if err == nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "this email already has an account",
+			"error": "this email already registered in the platform",
 		})
 	}
 	if err != nil && err != sql.ErrNoRows {
@@ -183,7 +183,7 @@ func Register(c *fiber.Ctx) error {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "this email already has an account",
+				"error": "this email already registered in the platform",
 			})
 		}
 		log.Printf("Register insert error: %v", err)
