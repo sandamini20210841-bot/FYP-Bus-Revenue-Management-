@@ -48,7 +48,7 @@ func main() {
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
-			"status": "ok",
+			"status":    "ok",
 			"timestamp": time.Now().Unix(),
 		})
 	})
@@ -86,6 +86,7 @@ func main() {
 	users := protected.Group("/users")
 	users.Post("", handlers.CreateUser)
 	users.Get("", handlers.GetUsers)
+	users.Get("/me/access", handlers.GetMyAccess)
 	users.Get("/:userId/access", handlers.GetUserAccess)
 	users.Put("/:userId/access", handlers.UpdateUserAccess)
 	users.Delete("/:userId", handlers.DeleteUser)

@@ -5,6 +5,7 @@ import type { AppDispatch } from "../store";
 import { setAuthError, setAuthLoading, setToken, setUser } from "../store/slices/authSlice";
 import api from "../utils/axios";
 import type { AxiosError } from "axios";
+import { clearPermissionCache } from "../hooks/useAccessPermissions";
 
 const LoginPage = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -67,6 +68,8 @@ const LoginPage = () => {
       if (token && refreshToken) {
         dispatch(setToken({ token, refreshToken }));
       }
+
+      clearPermissionCache();
 
       navigate(from, { replace: true });
     } catch (error) {

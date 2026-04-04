@@ -26,6 +26,10 @@ type StopResponse struct {
 
 // CreateRoute creates a new bus route
 func CreateRoute(c *fiber.Ctx) error {
+	if err := enforceModulePermission(c, "routes", "create"); err != nil {
+		return err
+	}
+
 	type CreateRouteRequest struct {
 		RouteNumber string      `json:"route_number" validate:"required"`
 		BusNumber   string      `json:"bus_number"`
@@ -138,6 +142,10 @@ func CreateRoute(c *fiber.Ctx) error {
 
 // GetRoutes retrieves all routes
 func GetRoutes(c *fiber.Ctx) error {
+	if err := enforceModulePermission(c, "routes", "view"); err != nil {
+		return err
+	}
+
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 10)
 	_ = c.Query("routeNumber")
@@ -265,6 +273,10 @@ func GetRoute(c *fiber.Ctx) error {
 
 // UpdateRoute updates a route
 func UpdateRoute(c *fiber.Ctx) error {
+	if err := enforceModulePermission(c, "routes", "edit"); err != nil {
+		return err
+	}
+
 	routeID := c.Params("routeId")
 	if strings.TrimSpace(routeID) == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -398,6 +410,10 @@ func parseToFloat(s string) (float64, error) {
 
 // DeleteRoute deletes a route
 func DeleteRoute(c *fiber.Ctx) error {
+	if err := enforceModulePermission(c, "routes", "delete"); err != nil {
+		return err
+	}
+
 	routeID := strings.TrimSpace(c.Params("routeId"))
 	if routeID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

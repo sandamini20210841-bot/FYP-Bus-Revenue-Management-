@@ -4,6 +4,7 @@ import type { AppDispatch } from "../store";
 import { addNotification } from "../store/slices/alertsSlice";
 import api from "../utils/axios";
 import RouteMapModal from "../components/RouteMapModal";
+import { useAccessPermissions } from "../hooks/useAccessPermissions";
 
 interface RouteStop {
   id: number;
@@ -31,6 +32,10 @@ const DEFAULT_ROUTE_COORDINATES = {
 
 const RoutesPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const { canCreate, canEdit, canDelete } = useAccessPermissions();
+  const canCreateRoutes = canCreate("routes");
+  const canEditRoutes = canEdit("routes");
+  const canDeleteRoutes = canDelete("routes");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [routeNumber, setRouteNumber] = useState("");
   const [routeNumberError, setRouteNumberError] = useState<string | null>(
@@ -192,6 +197,8 @@ const RoutesPage: React.FC = () => {
   };
 
   const handleOpenModal = () => {
+    if (!canCreateRoutes) return;
+
     // reset form when opening
     setEditingRoute(null);
     setRouteNumber("");
@@ -219,6 +226,8 @@ const RoutesPage: React.FC = () => {
   };
 
   const handleEditRoute = (route: RouteDefinition) => {
+    if (!canEditRoutes) return;
+
     setEditingRoute(route);
     setRouteNumber(route.routeNumber);
     setRouteNumberError(null);
@@ -241,6 +250,7 @@ const RoutesPage: React.FC = () => {
   };
 
   const openDeleteConfirmation = (route: RouteDefinition) => {
+    if (!canDeleteRoutes) return;
     setRoutePendingDelete(route);
   };
 
@@ -525,13 +535,15 @@ const RoutesPage: React.FC = () => {
           <h2 className="text-sm font-semibold text-slate-900">Route List</h2>
         </div>
         <div className="px-6 pt-3 pb-3 flex justify-start">
-          <button
-            type="button"
-            onClick={handleOpenModal}
-            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
-          >
-            <span>+ Create Route</span>
-          </button>
+          {canCreateRoutes && (
+            <button
+              type="button"
+              onClick={handleOpenModal}
+              className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
+            >
+              <span>+ Create Route</span>
+            </button>
+          )}
         </div>
         {routes.length === 0 ? (
           <div className="px-6 pb-10 pt-2 text-center text-sm text-slate-500">
@@ -568,64 +580,68 @@ const RoutesPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditRoute(route);
-                        }}
-                        role="button"
-                        aria-label="Edit route"
-                        title="Edit"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          className="h-3.5 w-3.5"
-                          aria-hidden="true"
+                      {canEditRoutes && (
+                        <span
+                          className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditRoute(route);
+                          }}
+                          role="button"
+                          aria-label="Edit route"
+                          title="Edit"
                         >
-                          <path
-                            d="M4 13.5V16h2.5L14 8.5 11.5 6 4 13.5zM15.8 6L14 4.2 15.2 3c.4-.4 1-.4 1.4 0l.4.4c.4.4.4 1 0 1.4L15.8 6z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </span>
-                      <span
-                        className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openDeleteConfirmation(route);
-                        }}
-                        role="button"
-                        aria-label="Delete route"
-                        title="Delete"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          className="h-3.5 w-3.5"
-                          aria-hidden="true"
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M4 13.5V16h2.5L14 8.5 11.5 6 4 13.5zM15.8 6L14 4.2 15.2 3c.4-.4 1-.4 1.4 0l.4.4c.4.4.4 1 0 1.4L15.8 6z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        </span>
+                      )}
+                      {canDeleteRoutes && (
+                        <span
+                          className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteConfirmation(route);
+                          }}
+                          role="button"
+                          aria-label="Delete route"
+                          title="Delete"
                         >
-                          <path
-                            d="M6 7.5V15C6 15.5523 6.44772 16 7 16H13C13.5523 16 14 15.5523 14 15V7.5"
-                            stroke="currentColor"
-                            strokeWidth="1.4"
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M5 5.5H15"
-                            stroke="currentColor"
-                            strokeWidth="1.4"
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M8.5 4.5H11.5"
-                            stroke="currentColor"
-                            strokeWidth="1.4"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </span>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M6 7.5V15C6 15.5523 6.44772 16 7 16H13C13.5523 16 14 15.5523 14 15V7.5"
+                              stroke="currentColor"
+                              strokeWidth="1.4"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M5 5.5H15"
+                              stroke="currentColor"
+                              strokeWidth="1.4"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M8.5 4.5H11.5"
+                              stroke="currentColor"
+                              strokeWidth="1.4"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        </span>
+                      )}
                     </div>
                   </button>
 

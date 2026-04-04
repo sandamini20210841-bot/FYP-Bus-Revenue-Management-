@@ -26,7 +26,20 @@ var allowedAccessModules = []string{
 
 func isAdmin(c *fiber.Ctx) bool {
 	roleClaim, _ := c.Locals("userRole").(string)
-	return strings.EqualFold(strings.TrimSpace(roleClaim), "admin")
+	return normalizeRole(roleClaim) == "admin"
+}
+
+func isBackofficeViewer(c *fiber.Ctx) bool {
+	roleClaim, _ := c.Locals("userRole").(string)
+	role := normalizeRole(roleClaim)
+	return role == "admin" || role == "bus_owner" || role == "accountant"
+}
+
+func normalizeRole(rawRole string) string {
+	role := strings.TrimSpace(strings.ToLower(rawRole))
+	role = strings.ReplaceAll(role, "-", "_")
+	role = strings.ReplaceAll(role, " ", "_")
+	return role
 }
 
 func resolveUserUUIDByPublicID(publicID string) (string, error) {
@@ -42,6 +55,149 @@ func resolveUserUUIDByPublicID(publicID string) (string, error) {
 		return "", err
 	}
 	return userUUID, nil
+}
+
+type accessPermissionState struct {
+	canCreate bool
+	canView   bool
+	canEdit   bool
+	canDelete bool
+}
+
+func roleDefaultPermissions(role string) map[string]accessPermissionState {
+	defaults := map[string]accessPermissionState{}
+
+	switch normalizeRole(role) {
+	case "admin":
+		for _, module := range allowedAccessModules {
+			defaults[module] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: true}
+		}
+	case "bus_owner":
+		for _, module := range []string{"dashboard", "discrepancies", "summary", "reports", "users"} {
+			defaults[module] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
+		}
+		defaults["routes"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
+	case "accountant":
+		defaults["dashboard"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
+		defaults["discrepancies"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
+		defaults["routes"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
+		defaults["summary"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
+		defaults["reports"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
+	}
+
+	return defaults
+}
+
+func resetUserPermissionsToRoleDefaults(tx *sql.Tx, userUUID string, role string) error {
+	if _, err := tx.Exec(`DELETE FROM user_access_permissions WHERE user_id = $1`, userUUID); err != nil {
+		return err
+	}
+
+	roleDefaults := roleDefaultPermissions(role)
+	for _, module := range allowedAccessModules {
+		state, ok := roleDefaults[module]
+		if !ok {
+			state = accessPermissionState{}
+		}
+
+		if _, err := tx.Exec(
+			`INSERT INTO user_access_permissions (user_id, module_name, can_create, can_view, can_edit, can_delete)
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
+			userUUID,
+			module,
+			state.canCreate,
+			state.canView,
+			state.canEdit,
+			state.canDelete,
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func buildUserAccessPermissions(userUUID string, role string) ([]fiber.Map, error) {
+	rows, err := database.Query(
+		`SELECT module_name, can_create, can_view, can_edit, can_delete
+		 FROM user_access_permissions
+		 WHERE user_id = $1`,
+		userUUID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	permissionMap := map[string]accessPermissionState{}
+	for rows.Next() {
+		var module string
+		var canCreate bool
+		var canView bool
+		var canEdit bool
+		var canDelete bool
+		if err := rows.Scan(&module, &canCreate, &canView, &canEdit, &canDelete); err != nil {
+			continue
+		}
+		permissionMap[module] = accessPermissionState{
+			canCreate: canCreate,
+			canView:   canView,
+			canEdit:   canEdit,
+			canDelete: canDelete,
+		}
+	}
+
+	roleDefaults := roleDefaultPermissions(role)
+
+	permissions := make([]fiber.Map, 0, len(allowedAccessModules))
+	for _, module := range allowedAccessModules {
+		state, hasExplicit := permissionMap[module]
+		if !hasExplicit {
+			if defaultState, ok := roleDefaults[module]; ok {
+				state = defaultState
+			} else {
+				state = accessPermissionState{}
+			}
+		}
+
+		permissions = append(permissions, fiber.Map{
+			"module_name": module,
+			"can_create":  state.canCreate,
+			"can_view":    state.canView,
+			"can_edit":    state.canEdit,
+			"can_delete":  state.canDelete,
+		})
+	}
+
+	return permissions, nil
+}
+
+// GetMyAccess retrieves module-level permissions for the authenticated back-office user.
+func GetMyAccess(c *fiber.Ctx) error {
+	if !isBackofficeViewer(c) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Access denied",
+		})
+	}
+
+	userID, _ := c.Locals("userId").(string)
+	if strings.TrimSpace(userID) == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Missing user in context",
+		})
+	}
+
+	roleClaim, _ := c.Locals("userRole").(string)
+	permissions, err := buildUserAccessPermissions(userID, roleClaim)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to load user access",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"permissions": permissions,
+	})
 }
 
 // DeleteUser deletes a back-office user account (admin only).
@@ -221,6 +377,38 @@ func CreateUser(c *fiber.Ctx) error {
 		})
 	}
 
+	if role == "bus_owner" {
+		defaultViewModules := []string{"dashboard", "discrepancies", "summary", "reports", "users"}
+		for _, moduleName := range defaultViewModules {
+			_, permErr := database.Exec(
+				`INSERT INTO user_access_permissions (user_id, module_name, can_create, can_view, can_edit, can_delete)
+				 VALUES ($1, $2, FALSE, TRUE, FALSE, FALSE)
+				 ON CONFLICT (user_id, module_name)
+				 DO UPDATE SET can_create = FALSE, can_view = TRUE, can_edit = FALSE, can_delete = FALSE, updated_at = NOW()`,
+				user.ID,
+				moduleName,
+			)
+			if permErr != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "Failed to initialize bus owner access permissions",
+				})
+			}
+		}
+
+		_, routesPermErr := database.Exec(
+			`INSERT INTO user_access_permissions (user_id, module_name, can_create, can_view, can_edit, can_delete)
+			 VALUES ($1, 'routes', FALSE, TRUE, TRUE, TRUE)
+			 ON CONFLICT (user_id, module_name)
+			 DO UPDATE SET can_create = FALSE, can_view = TRUE, can_edit = TRUE, can_delete = TRUE, updated_at = NOW()`,
+			user.ID,
+		)
+		if routesPermErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to initialize bus owner routes access permissions",
+			})
+		}
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"success":           true,
 		"message":           "User created successfully",
@@ -239,12 +427,6 @@ func CreateUser(c *fiber.Ctx) error {
 
 // GetUsers retrieves back-office users for admin view.
 func GetUsers(c *fiber.Ctx) error {
-	if !isAdmin(c) {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error": "Access denied",
-		})
-	}
-
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 20)
 	if page < 1 {
@@ -350,50 +532,17 @@ func GetUserAccess(c *fiber.Ctx) error {
 		})
 	}
 
-	rows, err := database.Query(
-		`SELECT module_name, can_create, can_view, can_edit, can_delete
-		 FROM user_access_permissions
-		 WHERE user_id = $1`,
-		userUUID,
-	)
+	var userRole string
+	if err := database.QueryRow(`SELECT role FROM users WHERE id = $1`, userUUID).Scan(&userRole); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to resolve user role",
+		})
+	}
+
+	permissions, err := buildUserAccessPermissions(userUUID, userRole)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to load user access",
-		})
-	}
-	defer rows.Close()
-
-	permissionMap := map[string]fiber.Map{}
-	for rows.Next() {
-		var module string
-		var canCreate bool
-		var canView bool
-		var canEdit bool
-		var canDelete bool
-		if err := rows.Scan(&module, &canCreate, &canView, &canEdit, &canDelete); err != nil {
-			continue
-		}
-		permissionMap[module] = fiber.Map{
-			"module_name": module,
-			"can_create":  canCreate,
-			"can_view":    canView,
-			"can_edit":    canEdit,
-			"can_delete":  canDelete,
-		}
-	}
-
-	permissions := []fiber.Map{}
-	for _, module := range allowedAccessModules {
-		if p, ok := permissionMap[module]; ok {
-			permissions = append(permissions, p)
-			continue
-		}
-		permissions = append(permissions, fiber.Map{
-			"module_name": module,
-			"can_create":  false,
-			"can_view":    false,
-			"can_edit":    false,
-			"can_delete":  false,
 		})
 	}
 
@@ -636,11 +785,36 @@ func UpdateUser(c *fiber.Ctx) error {
 		})
 	}
 
+	targetUserID := strings.TrimSpace(userIDClaim)
+	if isAdmin(c) {
+		publicUserID := strings.TrimSpace(c.Params("userId"))
+		if publicUserID == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "userId is required",
+			})
+		}
+
+		resolvedUserID, err := resolveUserUUIDByPublicID(publicUserID)
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "User not found",
+			})
+		}
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to resolve user",
+			})
+		}
+
+		targetUserID = strings.TrimSpace(resolvedUserID)
+	}
+
 	type UpdateUserRequest struct {
 		FullName        string `json:"full_name"`
 		PhoneNumber     string `json:"phone_number"`
 		Email           string `json:"email"`
 		ProfilePhotoURL string `json:"profile_photo_url"`
+		Role            string `json:"role"`
 	}
 
 	var req UpdateUserRequest
@@ -656,14 +830,37 @@ func UpdateUser(c *fiber.Ctx) error {
 		})
 	}
 
+	roleToUpdate := ""
+	currentRole := ""
+	if isAdmin(c) {
+		roleToUpdate = strings.TrimSpace(strings.ToLower(req.Role))
+		if roleToUpdate != "" && roleToUpdate != "admin" && roleToUpdate != "bus_owner" && roleToUpdate != "accountant" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid role for back-office user",
+			})
+		}
+
+		if err := database.QueryRow("SELECT role FROM users WHERE id = $1", targetUserID).Scan(&currentRole); err != nil {
+			if err == sql.ErrNoRows {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "User not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to resolve user role",
+			})
+		}
+	}
+
 	var user models.User
 	err := database.QueryRow(
-		"UPDATE users SET email = $2, phone_number = $3, full_name = $4, profile_photo_url = $5, updated_at = NOW() WHERE id = $1 RETURNING id, email, phone_number, full_name, role, COALESCE(profile_photo_url, ''), created_at, updated_at, last_login, public_id",
-		userIDClaim,
+		"UPDATE users SET email = $2, phone_number = $3, full_name = $4, profile_photo_url = $5, role = CASE WHEN $6 <> '' THEN $6 ELSE role END, updated_at = NOW() WHERE id = $1 RETURNING id, email, phone_number, full_name, role, COALESCE(profile_photo_url, ''), created_at, updated_at, last_login, public_id",
+		targetUserID,
 		req.Email,
 		req.PhoneNumber,
 		req.FullName,
 		req.ProfilePhotoURL,
+		roleToUpdate,
 	).Scan(
 		&user.ID,
 		&user.Email,
@@ -681,15 +878,43 @@ func UpdateUser(c *fiber.Ctx) error {
 			"error": "User not found",
 		})
 	}
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "this email already registered in the platform",
+		})
+	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to update user",
 		})
 	}
 
+	if isAdmin(c) && roleToUpdate != "" && normalizeRole(roleToUpdate) != normalizeRole(currentRole) {
+		tx, txErr := database.PostgresDB.Begin()
+		if txErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update role permissions",
+			})
+		}
+		defer tx.Rollback()
+
+		if permErr := resetUserPermissionsToRoleDefaults(tx, user.ID, roleToUpdate); permErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update role permissions",
+			})
+		}
+
+		if commitErr := tx.Commit(); commitErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to finalize role permissions",
+			})
+		}
+	}
+
 	return c.JSON(fiber.Map{
 		"success": true,
-		"user": user,
+		"user":    user,
 	})
 }
 
@@ -707,7 +932,7 @@ func GetUserTransactions(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"transactions": []fiber.Map{},
 		"pagination": fiber.Map{
-			"page": page,
+			"page":  page,
 			"limit": limit,
 			"total": 0,
 		},

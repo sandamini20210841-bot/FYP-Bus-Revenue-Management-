@@ -82,7 +82,7 @@ const RegisterPage = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
             <label className="block text-sm font-medium text-slate-200 mb-1">
-              Full name
+              Full name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -96,7 +96,7 @@ const RegisterPage = () => {
 
             <div>
             <label className="block text-sm font-medium text-slate-200 mb-1">
-              Email
+              Email <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
@@ -110,7 +110,7 @@ const RegisterPage = () => {
 
             <div>
             <label className="block text-sm font-medium text-slate-200 mb-1">
-              Phone number
+              Phone number <span className="text-red-500">*</span>
             </label>
             <input
               type="tel"
@@ -124,7 +124,7 @@ const RegisterPage = () => {
 
             <div>
             <label className="block text-sm font-medium text-slate-200 mb-1">
-              User type
+              Role <span className="text-red-500">*</span>
             </label>
             <select
               value={userType}
@@ -141,7 +141,7 @@ const RegisterPage = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-200 mb-1">
-                Password
+                Password <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -194,7 +194,7 @@ const RegisterPage = () => {
 
             <div>
               <label className="block text-sm font-medium text-slate-200 mb-1">
-                Confirm password
+                Confirm password <span className="text-red-500">*</span>
               </label>
               <input
                 type="password"

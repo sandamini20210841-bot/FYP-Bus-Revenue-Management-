@@ -38,6 +38,19 @@ const roleLabel = (role: string) => {
 };
 
 const UsersPage: React.FC = () => {
+  const currentRole = (() => {
+    if (typeof window === "undefined") return "admin";
+    try {
+      const raw = localStorage.getItem("authUser");
+      if (!raw) return "admin";
+      const parsed = JSON.parse(raw) as { role?: string };
+      return (parsed.role || "admin").toLowerCase();
+    } catch {
+      return "admin";
+    }
+  })();
+  const isAdminUser = currentRole === "admin";
+
   const [users, setUsers] = useState<BackofficeUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +73,16 @@ const UsersPage: React.FC = () => {
   const [accessError, setAccessError] = useState<string | null>(null);
   const [accessSuccess, setAccessSuccess] = useState<string | null>(null);
   const [isDeletingUserId, setIsDeletingUserId] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    full_name: "",
+    email: "",
+    phone_number: "",
+    role: "bus_owner",
+  });
 
   const loadUsers = async () => {
     setLoading(true);
@@ -226,6 +249,13 @@ const UsersPage: React.FC = () => {
       await api.put(`/users/${selectedUser.id}/access`, {
         permissions: accessPermissions,
       });
+
+      const refreshResponse = await api.get(`/users/${selectedUser.id}/access`);
+      const refreshedPermissions = Array.isArray(refreshResponse.data?.permissions)
+        ? refreshResponse.data.permissions
+        : [];
+      setAccessPermissions(refreshedPermissions);
+
       setAccessSuccess("Access permissions updated successfully.");
     } catch (err: any) {
       const message = err?.response?.data?.error;
@@ -255,25 +285,73 @@ const UsersPage: React.FC = () => {
     }
   };
 
+  const openEditModal = (user: BackofficeUser) => {
+    setSelectedUser(user);
+    setEditForm({
+      full_name: user.full_name || "",
+      email: user.email || "",
+      phone_number: user.phone_number || "",
+      role: user.role || "bus_owner",
+    });
+    setEditError(null);
+    setEditSuccess(null);
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    if (isEditing) return;
+    setIsEditModalOpen(false);
+    setEditError(null);
+    setEditSuccess(null);
+  };
+
+  const handleUpdateUser = async () => {
+    if (!selectedUser || isEditing) return;
+
+    if (!editForm.full_name.trim() || !editForm.email.trim() || !editForm.role.trim()) {
+      setEditError("Name, email and role are required.");
+      return;
+    }
+
+    setIsEditing(true);
+    setEditError(null);
+    setEditSuccess(null);
+
+    try {
+      await api.put(`/users/${selectedUser.id}`, {
+        full_name: editForm.full_name.trim(),
+        email: editForm.email.trim(),
+        phone_number: editForm.phone_number.trim(),
+        role: editForm.role,
+      });
+      setEditSuccess("User updated successfully.");
+      await loadUsers();
+    } catch (err: any) {
+      const message = err?.response?.data?.error;
+      setEditError(message || "Failed to update user.");
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">Users</h1>
-        <p className="text-sm text-slate-500">
-          Back-office accounts managed by the admin.
-        </p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-start">
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
-          >
-            <span className="text-sm leading-none">+</span>
-            <span>Create user</span>
-          </button>
+          {isAdminUser && (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
+            >
+              <span className="text-sm leading-none">+</span>
+              <span>Create user</span>
+            </button>
+          )}
         </div>
 
         <div className="px-6 py-4 overflow-x-auto">
@@ -286,13 +364,13 @@ const UsersPage: React.FC = () => {
                 <th className="py-2 pr-4 font-semibold">Role</th>
                 <th className="py-2 pr-4 font-semibold">Status</th>
                 <th className="py-2 pr-4 font-semibold">Last Login</th>
-                <th className="py-2 pr-0 font-semibold">Action</th>
+                {isAdminUser && <th className="py-2 pr-0 font-semibold">Action</th>}
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-[11px] text-slate-400">
+                  <td colSpan={isAdminUser ? 7 : 6} className="py-6 text-center text-[11px] text-slate-400">
                     Loading users...
                   </td>
                 </tr>
@@ -300,7 +378,7 @@ const UsersPage: React.FC = () => {
 
               {!loading && error && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-[11px] text-red-500">
+                  <td colSpan={isAdminUser ? 7 : 6} className="py-6 text-center text-[11px] text-red-500">
                     {error}
                   </td>
                 </tr>
@@ -308,14 +386,21 @@ const UsersPage: React.FC = () => {
 
               {!loading && !error && users.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-[11px] text-slate-400">
+                  <td colSpan={isAdminUser ? 7 : 6} className="py-6 text-center text-[11px] text-slate-400">
                     No back-office users found.
                   </td>
                 </tr>
               )}
 
               {!loading && !error && users.map((user) => (
-                <tr key={user.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+                <tr
+                  key={user.id}
+                  className={`border-b border-slate-100 last:border-b-0 hover:bg-slate-50 ${isAdminUser ? "cursor-pointer" : ""}`}
+                  onClick={() => {
+                    if (!isAdminUser) return;
+                    void openAccessModal(user);
+                  }}
+                >
                   <td className="py-3 pr-4">{user.full_name || "-"}</td>
                   <td className="py-3 pr-4">{user.email}</td>
                   <td className="py-3 pr-4">{user.phone_number || "-"}</td>
@@ -334,40 +419,49 @@ const UsersPage: React.FC = () => {
                   <td className="py-3 pr-4">
                     {user.last_login ? new Date(user.last_login).toLocaleString() : "-"}
                   </td>
-                  <td className="py-3 pr-0">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void openAccessModal(user);
-                        }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100"
-                        aria-label={`Edit access for ${user.full_name || user.email}`}
-                        title="Edit access"
-                      >
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
-                          <path d="M3.5 13.75V16.5h2.75L15 7.75 12.25 5 3.5 13.75Z" />
-                          <path d="M11.5 5.75 14.25 8.5" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleDeleteUser(user);
-                        }}
-                        disabled={isDeletingUserId === user.id}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        aria-label={`Delete ${user.full_name || user.email}`}
-                        title="Delete user"
-                      >
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
-                          <path d="M4.5 6h11" />
-                          <path d="M8 6V4.75h4V6" />
-                          <path d="M7 6v9h6V6" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
+                  {isAdminUser && (
+                    <td
+                      className="py-3 pr-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(user);
+                          }}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100"
+                          aria-label={`Edit ${user.full_name || user.email}`}
+                          title="Edit user"
+                        >
+                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                            <path d="M3.5 13.75V16.5h2.75L15 7.75 12.25 5 3.5 13.75Z" />
+                            <path d="M11.5 5.75 14.25 8.5" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDeleteUser(user);
+                          }}
+                          disabled={isDeletingUserId === user.id}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          aria-label={`Delete ${user.full_name || user.email}`}
+                          title="Delete user"
+                        >
+                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                            <path d="M4.5 6h11" />
+                            <path d="M8 6V4.75h4V6" />
+                            <path d="M7 6v9h6V6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -414,7 +508,9 @@ const UsersPage: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={createForm.full_name}
@@ -425,7 +521,9 @@ const UsersPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="email"
                   value={createForm.email}
@@ -447,7 +545,9 @@ const UsersPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Role</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Role <span className="text-red-500">*</span>
+                </label>
                 <select
                   value={createForm.role}
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, role: e.target.value }))}
@@ -478,6 +578,116 @@ const UsersPage: React.FC = () => {
                 className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isCreating ? "Creating..." : "Create user"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-xl">
+            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Edit User</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Update user details for {selectedUser?.full_name || selectedUser?.email || "selected user"}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditModal}
+                disabled={isEditing}
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none disabled:opacity-60 disabled:cursor-not-allowed"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              {editError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-600">
+                  {editError}
+                </div>
+              )}
+              {editSuccess && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
+                  {editSuccess}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Full name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="name@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Phone (optional)</label>
+                <input
+                  type="text"
+                  value={editForm.phone_number}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, phone_number: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="07XXXXXXXX"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Role <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, role: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="bus_owner">Bus owner</option>
+                  <option value="accountant">Accountant</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={closeEditModal}
+                disabled={isEditing}
+                className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleUpdateUser();
+                }}
+                disabled={isEditing}
+                className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isEditing ? "Saving..." : "Save changes"}
               </button>
             </div>
           </div>

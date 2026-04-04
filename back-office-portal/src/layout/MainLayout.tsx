@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "../store";
 import { logout } from "../store/slices/authSlice";
 import NotificationContainer from "../components/NotificationContainer";
+import { clearPermissionCache, useAccessPermissions } from "../hooks/useAccessPermissions";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -17,6 +18,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const dispatch = useDispatch<AppDispatch>();
   const userFromStore = useSelector((state: RootState) => state.auth.user);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const { canView } = useAccessPermissions();
 
   const fullName = useMemo(() => {
     if (userFromStore?.fullName) return userFromStore.fullName;
@@ -36,28 +38,27 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     return "User";
   }, [userFromStore]);
 
-  const roleLabel = useMemo(() => {
-    const resolveRole = (): string | undefined => {
-      if (userFromStore?.role) return userFromStore.role;
-      if (typeof window !== "undefined") {
-        const raw = localStorage.getItem("authUser");
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw) as { role?: string };
-            return parsed.role;
-          } catch {
-            // ignore
-          }
+  const rawRole = useMemo(() => {
+    if (userFromStore?.role) return userFromStore.role.toLowerCase();
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem("authUser");
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { role?: string };
+          return (parsed.role || "admin").toLowerCase();
+        } catch {
+          // ignore
         }
       }
-      return undefined;
-    };
+    }
+    return "admin";
+  }, [userFromStore]);
 
-    const rawRole = (resolveRole() || "admin").toLowerCase();
+  const roleLabel = useMemo(() => {
     if (rawRole === "bus_owner") return "Bus owner";
     if (rawRole === "accountant") return "Accountant";
     return "Admin";
-  }, [userFromStore]);
+  }, [rawRole]);
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900">
@@ -130,6 +131,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
+          {canView("dashboard") && (
           <NavLink
             to="/"
             end
@@ -156,7 +158,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </span>
             <span>Dashboard</span>
           </NavLink>
+          )}
 
+          {canView("discrepancies") && (
           <NavLink
             to="/discrepancies"
             className={({ isActive }) =>
@@ -199,7 +203,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </span>
             <span>Discrepancies</span>
           </NavLink>
+          )}
 
+          {canView("routes") && (
           <NavLink
             to="/routes"
             className={({ isActive }) =>
@@ -242,7 +248,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </span>
             <span>Routes</span>
           </NavLink>
+          )}
 
+          {canView("summary") && (
           <NavLink
             to="/summary"
             className={({ isActive }) =>
@@ -285,7 +293,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </span>
             <span>Summary</span>
           </NavLink>
+          )}
 
+          {canView("reports") && (
           <NavLink
             to="/reports"
             className={({ isActive }) =>
@@ -335,7 +345,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </span>
             <span>Reports</span>
           </NavLink>
+          )}
 
+          {canView("users") && (
           <NavLink
             to="/users"
             className={({ isActive }) =>
@@ -361,32 +373,35 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </span>
             <span>Users</span>
           </NavLink>
+          )}
 
-          <NavLink
-            to="/audit-logs"
-            className={({ isActive }) =>
-              `${navLinkBaseClasses} ${
-                isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`
-            }
-          >
-            <span className="text-lg">
-              <svg
-                className="h-5 w-5 text-slate-600"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <rect x="4" y="3.5" width="12" height="13" rx="1.8" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M7 7.25H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                <path d="M7 10H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                <path d="M7 12.75H11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </span>
-            <span>Audit Logs</span>
-          </NavLink>
+          {rawRole === "admin" && canView("audit_logs") && (
+            <NavLink
+              to="/audit-logs"
+              className={({ isActive }) =>
+                `${navLinkBaseClasses} ${
+                  isActive
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-slate-600 hover:bg-slate-50"
+                }`
+              }
+            >
+              <span className="text-lg">
+                <svg
+                  className="h-5 w-5 text-slate-600"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect x="4" y="3.5" width="12" height="13" rx="1.8" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M7 7.25H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  <path d="M7 10H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  <path d="M7 12.75H11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </span>
+              <span>Audit Logs</span>
+            </NavLink>
+          )}
         </nav>
 
         <div className="px-4 pb-6 pt-2 relative">
@@ -502,6 +517,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   localStorage.removeItem("authToken");
                   localStorage.removeItem("refreshToken");
                   localStorage.removeItem("authUser");
+                  clearPermissionCache();
                   dispatch(logout());
                   navigate("/login");
                 }}

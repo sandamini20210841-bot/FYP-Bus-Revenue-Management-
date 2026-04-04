@@ -20,6 +20,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import SummaryPage from "./pages/SummaryPage";
 import UsersPage from "./pages/UsersPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import { type ModuleName, useAccessPermissions } from "./hooks/useAccessPermissions";
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
   const location = useLocation();
@@ -31,6 +32,34 @@ const RequireAuth = ({ children }: { children: JSX.Element }) => {
 
   if (!isAuthenticated && !token) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+};
+
+const RequireModuleAccess = ({
+  moduleName,
+  children,
+}: {
+  moduleName: ModuleName;
+  children: JSX.Element;
+}) => {
+  const { isLoading, canView } = useAccessPermissions();
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+        Loading access settings...
+      </div>
+    );
+  }
+
+  if (!canView(moduleName)) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        Access denied for this module.
+      </div>
+    );
   }
 
   return children;
@@ -52,7 +81,9 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <DashboardPage />
+                  <RequireModuleAccess moduleName="dashboard">
+                    <DashboardPage />
+                  </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>
             }
@@ -62,7 +93,9 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <DiscrepanciesPage />
+                  <RequireModuleAccess moduleName="discrepancies">
+                    <DiscrepanciesPage />
+                  </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>
             }
@@ -72,7 +105,9 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <RoutesPage />
+                  <RequireModuleAccess moduleName="routes">
+                    <RoutesPage />
+                  </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>
             }
@@ -82,7 +117,9 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <ReportsPage />
+                  <RequireModuleAccess moduleName="reports">
+                    <ReportsPage />
+                  </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>
             }
@@ -92,7 +129,9 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <SummaryPage />
+                  <RequireModuleAccess moduleName="summary">
+                    <SummaryPage />
+                  </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>
             }
@@ -112,7 +151,9 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <UsersPage />
+                  <RequireModuleAccess moduleName="users">
+                    <UsersPage />
+                  </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>
             }
@@ -122,7 +163,9 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <AuditLogsPage />
+                  <RequireModuleAccess moduleName="audit_logs">
+                    <AuditLogsPage />
+                  </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>
             }
