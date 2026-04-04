@@ -13,6 +13,10 @@ const AuditLogsPage: React.FC = () => {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+
+  const PAGE_SIZE = 10;
 
   useEffect(() => {
     const loadAuditLogs = async () => {
@@ -20,10 +24,11 @@ const AuditLogsPage: React.FC = () => {
       setError(null);
       try {
         const response = await api.get("/audit/logs", {
-          params: { page: 1, limit: 100 },
+          params: { page: currentPage, limit: PAGE_SIZE },
         });
 
         const rows = Array.isArray(response.data?.logs) ? response.data.logs : [];
+        const total = Number(response.data?.pagination?.total || 0);
         const mapped: AuditLogRow[] = rows.map((row: any) => ({
           id: String(row.id || ""),
           userName: String(row.userName || "Unknown user"),
@@ -32,19 +37,35 @@ const AuditLogsPage: React.FC = () => {
           ipAddress: typeof row.ipAddress === "string" ? row.ipAddress : undefined,
         }));
         setLogs(mapped);
+        setTotalRows(Number.isFinite(total) ? total : 0);
       } catch (err: any) {
         const message = err?.response?.data?.error;
         setError(message || "Failed to load audit logs.");
         setLogs([]);
+        setTotalRows(0);
       } finally {
         setIsLoading(false);
       }
     };
 
     void loadAuditLogs();
-  }, []);
+  }, [currentPage]);
 
   const hasLogs = useMemo(() => logs.length > 0, [logs]);
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(totalRows / PAGE_SIZE)),
+    [totalRows]
+  );
+
+  const pageButtons = useMemo(() => {
+    const pages: number[] = [];
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, start + 4);
+    for (let page = start; page <= end; page++) {
+      pages.push(page);
+    }
+    return pages;
+  }, [currentPage, totalPages]);
 
   const formatDate = (iso: string) => {
     if (!iso) return "-";
@@ -121,6 +142,42 @@ const AuditLogsPage: React.FC = () => {
                 ))}
             </tbody>
           </table>
+
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1 || isLoading}
+              className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+
+            {pageButtons.map((page) => (
+              <button
+                key={page}
+                type="button"
+                onClick={() => setCurrentPage(page)}
+                disabled={isLoading}
+                className={`h-7 min-w-7 rounded-full px-2 text-[11px] font-medium ${
+                  page === currentPage
+                    ? "bg-blue-600 text-white"
+                    : "border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage >= totalPages || isLoading}
+              className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>
