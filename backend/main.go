@@ -84,6 +84,11 @@ func main() {
 
 	// Users routes
 	users := protected.Group("/users")
+	users.Post("", handlers.CreateUser)
+	users.Get("", handlers.GetUsers)
+	users.Get("/:userId/access", handlers.GetUserAccess)
+	users.Put("/:userId/access", handlers.UpdateUserAccess)
+	users.Delete("/:userId", handlers.DeleteUser)
 	users.Get("/:userId", handlers.GetUser)
 	users.Put("/:userId", handlers.UpdateUser)
 	users.Get("/:userId/transactions", handlers.GetUserTransactions)

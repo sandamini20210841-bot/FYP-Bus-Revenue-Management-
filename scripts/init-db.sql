@@ -120,6 +120,20 @@ CREATE TABLE alert_settings (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User access permissions table (back-office feature visibility/edit rights)
+CREATE TABLE user_access_permissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  module_name VARCHAR(50) NOT NULL CHECK (module_name IN ('dashboard', 'discrepancies', 'routes', 'summary', 'reports', 'users', 'audit_logs')),
+  can_create BOOLEAN NOT NULL DEFAULT FALSE,
+  can_view BOOLEAN NOT NULL DEFAULT FALSE,
+  can_edit BOOLEAN NOT NULL DEFAULT FALSE,
+  can_delete BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, module_name)
+);
+
 -- Create indexes for performance
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_phone ON users(phone_number);
@@ -130,3 +144,4 @@ CREATE INDEX idx_transactions_date ON transactions(transaction_date);
 CREATE INDEX idx_discrepancies_route_id ON discrepancies(route_id);
 CREATE INDEX idx_discrepancies_date ON discrepancies(transaction_date);
 CREATE INDEX idx_discrepancies_status ON discrepancies(status);
+CREATE INDEX idx_user_access_permissions_user_id ON user_access_permissions(user_id);

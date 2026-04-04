@@ -335,6 +335,58 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </span>
             <span>Reports</span>
           </NavLink>
+
+          <NavLink
+            to="/users"
+            className={({ isActive }) =>
+              `${navLinkBaseClasses} ${
+                isActive
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`
+            }
+          >
+            <span className="text-lg">
+              <svg
+                className="h-5 w-5 text-slate-600"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle cx="7" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+                <circle cx="13" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M3.75 14.5C4.4 12.95 5.85 12 7.5 12H8.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <path d="M11.5 12H12.5C14.15 12 15.6 12.95 16.25 14.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span>Users</span>
+          </NavLink>
+
+          <NavLink
+            to="/audit-logs"
+            className={({ isActive }) =>
+              `${navLinkBaseClasses} ${
+                isActive
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`
+            }
+          >
+            <span className="text-lg">
+              <svg
+                className="h-5 w-5 text-slate-600"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect x="4" y="3.5" width="12" height="13" rx="1.8" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M7 7.25H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <path d="M7 10H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <path d="M7 12.75H11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span>Audit Logs</span>
+          </NavLink>
         </nav>
 
         <div className="px-4 pb-6 pt-2 relative">

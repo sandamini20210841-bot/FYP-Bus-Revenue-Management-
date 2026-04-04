@@ -18,6 +18,8 @@ import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import SummaryPage from "./pages/SummaryPage";
+import UsersPage from "./pages/UsersPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
   const location = useLocation();
@@ -106,11 +108,21 @@ function App() {
             }
           />
           <Route
+            path="/users"
+            element={
+              <RequireAuth>
+                <MainLayout>
+                  <UsersPage />
+                </MainLayout>
+              </RequireAuth>
+            }
+          />
+          <Route
             path="/audit-logs"
             element={
               <RequireAuth>
                 <MainLayout>
-                  <div>Audit Logs Page</div>
+                  <AuditLogsPage />
                 </MainLayout>
               </RequireAuth>
             }
