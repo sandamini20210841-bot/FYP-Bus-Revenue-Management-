@@ -4,6 +4,7 @@ import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../store";
 import { setAuthError, setAuthLoading, setToken, setUser } from "../store/slices/authSlice";
 import api from "../utils/axios";
+import type { AxiosError } from "axios";
 
 const LoginPage = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -26,7 +27,11 @@ const LoginPage = () => {
     setSubmitting(true);
 
     try {
-      const response = await api.post("/auth/login", { email, password });
+      const response = await api.post("/auth/login", {
+        email,
+        password,
+        portal: "backoffice",
+      });
       const { token, refreshToken, user } = response.data;
 
       const rawRole = (user?.role || "").toString().toLowerCase();
@@ -66,7 +71,15 @@ const LoginPage = () => {
       navigate(from, { replace: true });
     } catch (error) {
       console.error("Login failed", error);
-      setLocalError("Invalid email or password. Please try again.");
+      const axiosErr = error as AxiosError<{ error?: string }>;
+      const backendMessage = axiosErr.response?.data?.error;
+      if (backendMessage === "Access denied") {
+        setLocalError("Access denied");
+      } else if (backendMessage === "Invalid email or password") {
+        setLocalError("Invalid email or password. Please try again.");
+      } else {
+        setLocalError("Invalid email or password. Please try again.");
+      }
       dispatch(setAuthError("Login failed"));
     } finally {
       dispatch(setAuthLoading(false));

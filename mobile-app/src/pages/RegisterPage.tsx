@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../utils/axios";
+import type { AxiosError } from "axios";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -42,7 +43,15 @@ const RegisterPage = () => {
       }, 1200);
     } catch (err) {
       console.error("Registration failed", err);
-      setError("Could not create account. Please try again.");
+      const axiosErr = err as AxiosError<{ error?: string }>;
+      const backendMessage = axiosErr.response?.data?.error;
+      if (backendMessage === "this email already has an account") {
+        setError("this email already has an account");
+      } else if (backendMessage === "Access denied") {
+        setError("Access denied");
+      } else {
+        setError("Could not create account. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

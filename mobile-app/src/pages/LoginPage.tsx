@@ -70,6 +70,8 @@ const LoginPage = () => {
 
       if (status === 404) {
         setLocalError("No account found for this email. Please register.");
+      } else if (backendMessage === "Access denied") {
+        setLocalError("Access denied");
       } else if (backendMessage === "Invalid email or password") {
         setLocalError("Invalid email or password. Please try again.");
       } else {

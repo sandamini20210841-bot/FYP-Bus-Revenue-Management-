@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"net/smtp"
+	"strings"
 	"time"
 
 	"github.com/busticket/backend/config"
@@ -16,6 +18,7 @@ import (
 	"github.com/busticket/backend/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -80,6 +83,7 @@ func Register(c *fiber.Ctx) error {
 		FullName    string `json:"full_name" validate:"required"`
 		PhoneNumber string `json:"phone_number" validate:"required"`
 		UserType    string `json:"user_type" validate:"required"` // rider, bus_owner, accountant
+		Portal      string `json:"portal"`
 	}
 
 	var req RegisterRequest
@@ -95,6 +99,12 @@ func Register(c *fiber.Ctx) error {
 	if req.Password == "" || req.Email == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Email and password are required",
+		})
+	}
+
+	if strings.EqualFold(strings.TrimSpace(req.Portal), "backoffice") && strings.EqualFold(strings.TrimSpace(req.UserType), "rider") {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Access denied",
 		})
 	}
 
@@ -131,7 +141,7 @@ func Register(c *fiber.Ctx) error {
 	err := database.QueryRow("SELECT id FROM users WHERE email = $1", req.Email).Scan(&existingID)
 	if err == nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Email is already registered",
+			"error": "this email already has an account",
 		})
 	}
 	if err != nil && err != sql.ErrNoRows {
@@ -170,6 +180,12 @@ func Register(c *fiber.Ctx) error {
 		&user.PublicID,
 	)
 	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "this email already has an account",
+			})
+		}
 		log.Printf("Register insert error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to create user",
@@ -215,6 +231,7 @@ func Login(c *fiber.Ctx) error {
 	type LoginRequest struct {
 		Email    string `json:"email" validate:"required,email"`
 		Password string `json:"password" validate:"required"`
+		Portal   string `json:"portal"`
 	}
 
 	var req LoginRequest
@@ -294,6 +311,12 @@ func Login(c *fiber.Ctx) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid email or password",
+		})
+	}
+
+	if strings.EqualFold(strings.TrimSpace(req.Portal), "backoffice") && strings.EqualFold(strings.TrimSpace(user.Role), "rider") {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Access denied",
 		})
 	}
 
