@@ -134,6 +134,17 @@ CREATE TABLE user_access_permissions (
   UNIQUE (user_id, module_name)
 );
 
+-- Audit logs table
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(50) NOT NULL,
+  resource VARCHAR(100),
+  details TEXT,
+  ip_address VARCHAR(64),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for performance
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_phone ON users(phone_number);
@@ -145,3 +156,5 @@ CREATE INDEX idx_discrepancies_route_id ON discrepancies(route_id);
 CREATE INDEX idx_discrepancies_date ON discrepancies(transaction_date);
 CREATE INDEX idx_discrepancies_status ON discrepancies(status);
 CREATE INDEX idx_user_access_permissions_user_id ON user_access_permissions(user_id);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);

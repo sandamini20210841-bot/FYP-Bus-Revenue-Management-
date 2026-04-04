@@ -73,6 +73,7 @@ const UsersPage: React.FC = () => {
   const [accessError, setAccessError] = useState<string | null>(null);
   const [accessSuccess, setAccessSuccess] = useState<string | null>(null);
   const [isDeletingUserId, setIsDeletingUserId] = useState<string | null>(null);
+  const [userPendingDelete, setUserPendingDelete] = useState<BackofficeUser | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -265,18 +266,26 @@ const UsersPage: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (user: BackofficeUser) => {
+  const openDeleteModal = (user: BackofficeUser) => {
     if (isDeletingUserId) return;
+    setUserPendingDelete(user);
+  };
 
-    const confirmed = window.confirm(`Delete user ${user.full_name || user.email}? This action cannot be undone.`);
-    if (!confirmed) return;
+  const closeDeleteModal = () => {
+    if (isDeletingUserId) return;
+    setUserPendingDelete(null);
+  };
 
-    setIsDeletingUserId(user.id);
+  const confirmDeleteUser = async () => {
+    if (isDeletingUserId || !userPendingDelete) return;
+
+    setIsDeletingUserId(userPendingDelete.id);
     setError(null);
 
     try {
-      await api.delete(`/users/${user.id}`);
+      await api.delete(`/users/${userPendingDelete.id}`);
       await loadUsers();
+      setUserPendingDelete(null);
     } catch (err: any) {
       const message = err?.response?.data?.error;
       setError(message || "Failed to delete user.");
@@ -446,7 +455,7 @@ const UsersPage: React.FC = () => {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void handleDeleteUser(user);
+                            openDeleteModal(user);
                           }}
                           disabled={isDeletingUserId === user.id}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -578,6 +587,40 @@ const UsersPage: React.FC = () => {
                 className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isCreating ? "Creating..." : "Create user"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {userPendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-900">Delete User</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Are you sure you want to delete {userPendingDelete.full_name || userPendingDelete.email}? This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                disabled={isDeletingUserId === userPendingDelete.id}
+                className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void confirmDeleteUser();
+                }}
+                disabled={isDeletingUserId === userPendingDelete.id}
+                className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isDeletingUserId === userPendingDelete.id ? "Deleting..." : "Yes"}
               </button>
             </div>
           </div>

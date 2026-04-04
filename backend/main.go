@@ -73,6 +73,7 @@ func main() {
 	// Protected routes
 	protected := api.Group("")
 	protected.Use(middleware.AuthRequired())
+	protected.Use(middleware.AuditLog())
 
 	// Tickets routes
 	tickets := protected.Group("/tickets")

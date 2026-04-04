@@ -326,7 +326,7 @@ func Login(c *fiber.Ctx) error {
 	refreshTokenExpiry := time.Now().Add(time.Duration(cfg.RefreshExpiration) * time.Second)
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.ID,
+		"sub":   user.ID,
 		"email": user.Email,
 		"role":  user.Role,
 		"exp":   accessTokenExpiry.Unix(),
@@ -353,9 +353,36 @@ func Login(c *fiber.Ctx) error {
 	// Update last_login
 	_, _ = database.Exec("UPDATE users SET last_login = NOW() WHERE id = $1", user.ID)
 
+	// Record successful login in audit logs.
+	_, _ = database.Exec(
+		`CREATE TABLE IF NOT EXISTS audit_logs (
+		  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+		  action VARCHAR(50) NOT NULL,
+		  resource VARCHAR(100),
+		  details TEXT,
+		  ip_address VARCHAR(64),
+		  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+	)
+
+	loginPortal := strings.TrimSpace(req.Portal)
+	if loginPortal == "" {
+		loginPortal = "default"
+	}
+	_, _ = database.Exec(
+		`INSERT INTO audit_logs (user_id, action, resource, details, ip_address)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		user.ID,
+		"login",
+		"auth",
+		fmt.Sprintf("Successful login via %s portal", loginPortal),
+		c.IP(),
+	)
+
 	return c.JSON(fiber.Map{
-		"success": true,
-		"token":   accessTokenString,
+		"success":      true,
+		"token":        accessTokenString,
 		"refreshToken": refreshTokenString,
 		"user": fiber.Map{
 			"id":       user.PublicID,
@@ -509,8 +536,8 @@ func RefreshToken(c *fiber.Ctx) error {
 	// TODO: Optionally rotate refresh token
 
 	return c.JSON(fiber.Map{
-		"success": true,
-		"token":   "new_jwt_token",
+		"success":      true,
+		"token":        "new_jwt_token",
 		"refreshToken": "new_refresh_token",
 	})
 }
