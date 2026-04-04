@@ -634,8 +634,12 @@ const RoutesPage: React.FC = () => {
                       <div className="hidden sm:grid grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(80px,auto),minmax(64px,auto),minmax(80px,auto)] gap-2 pb-1 text-[10px] font-medium text-slate-500 uppercase tracking-wide">
                         <span className="text-center">Stop Id</span>
                         <span>Stop Name</span>
-                        <span className="text-right">Distance</span>
-                        <span className="text-center">Fare Stage</span>
+                        <span className="text-right pr-2">Distance</span>
+                        <span className="block w-full text-center leading-tight -translate-x-1">
+                          Fare
+                          <br />
+                          Stage
+                        </span>
                         <span className="text-right">Amount</span>
                       </div>
                       <div className="space-y-1">
@@ -704,15 +708,15 @@ const RoutesPage: React.FC = () => {
                     value={routeNumber}
                     onChange={(e) => {
                       const raw = e.target.value;
-                      const digitsOnly = raw.replace(/\D/g, "");
-                      setRouteNumber(digitsOnly);
-                      if (raw && raw !== digitsOnly) {
-                        setRouteNumberError("Only numbers are allowed in this field.");
+                      const sanitized = raw.replace(/[^0-9/]/g, "");
+                      setRouteNumber(sanitized);
+                      if (raw && raw !== sanitized) {
+                        setRouteNumberError("Only numbers and / are allowed in this field.");
                       } else {
                         setRouteNumberError(null);
                       }
                     }}
-                    placeholder="e.g. 138"
+                    placeholder="e.g. 138/1"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {routeNumberError ? (
@@ -721,7 +725,7 @@ const RoutesPage: React.FC = () => {
                     </p>
                   ) : (
                     <p className="mt-1 text-[11px] text-slate-400">
-                      Numbers only. Characters and symbols are not allowed.
+                      Numbers and / only. Other characters are not allowed.
                     </p>
                   )}
                 </div>
@@ -787,8 +791,12 @@ const RoutesPage: React.FC = () => {
                 <div className="hidden sm:grid grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(80px,auto),minmax(64px,auto),minmax(80px,auto)] gap-2 px-1 pb-1 text-[11px] font-medium text-slate-500 uppercase tracking-wide">
                   <span className="text-center">Stop Id</span>
                   <span>Stop Name</span>
-                  <span className="text-right">Distance</span>
-                  <span className="text-center">Fare Stage</span>
+                  <span className="text-right pr-2">Distance</span>
+                  <span className="block w-full text-center leading-tight -translate-x-1">
+                    Fare
+                    <br />
+                    Stage
+                  </span>
                   <span className="text-right">Amount</span>
                 </div>
 

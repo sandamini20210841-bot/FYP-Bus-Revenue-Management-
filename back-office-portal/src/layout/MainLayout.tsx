@@ -244,6 +244,49 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </NavLink>
 
           <NavLink
+            to="/summary"
+            className={({ isActive }) =>
+              `${navLinkBaseClasses} ${
+                isActive
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`
+            }
+          >
+            <span className="text-lg">
+              <svg
+                className="h-5 w-5 text-slate-600"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 5.5H17"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M3 10H17"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M3 14.5H17"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+                <circle cx="6" cy="5.5" r="1" fill="currentColor" />
+                <circle cx="10" cy="10" r="1" fill="currentColor" />
+                <circle cx="14" cy="14.5" r="1" fill="currentColor" />
+              </svg>
+            </span>
+            <span>Summary</span>
+          </NavLink>
+
+          <NavLink
             to="/reports"
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${

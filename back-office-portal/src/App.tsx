@@ -17,6 +17,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import SummaryPage from "./pages/SummaryPage";
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
   const location = useLocation();
@@ -80,6 +81,16 @@ function App() {
               <RequireAuth>
                 <MainLayout>
                   <ReportsPage />
+                </MainLayout>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/summary"
+            element={
+              <RequireAuth>
+                <MainLayout>
+                  <SummaryPage />
                 </MainLayout>
               </RequireAuth>
             }
