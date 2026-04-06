@@ -22,7 +22,11 @@ import (
 func PurchaseTicket(c *fiber.Ctx) error {
 	type PurchaseTicketRequest struct {
 		RouteID        string `json:"route_id"`
+		Route          string `json:"route"`
 		RouteNumber    string `json:"route_number"`
+		BusNumber      string `json:"bus_number"`
+		DepartureDate  string `json:"departure_date"`
+		DepartureTime  string `json:"departure_time"`
 		FromStopID     string `json:"from_stop_id"`
 		FromStopName   string `json:"from_stop_name"`
 		ToStopID       string `json:"to_stop_id"`
@@ -60,6 +64,10 @@ func PurchaseTicket(c *fiber.Ctx) error {
 		req.PaymentMethod = "cash"
 	}
 
+	_, _ = database.Exec(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS bus_number VARCHAR(50)`)
+	_, _ = database.Exec(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS departure_date DATE`)
+	_, _ = database.Exec(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS departure_time TIME`)
+
 	var routeID string
 	var routeNumber string
 	if strings.TrimSpace(req.RouteID) != "" {
@@ -70,6 +78,21 @@ func PurchaseTicket(c *fiber.Ctx) error {
 		if err == sql.ErrNoRows {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Invalid route_id",
+			})
+		}
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to resolve route",
+			})
+		}
+	} else if strings.TrimSpace(req.Route) != "" {
+		err := database.QueryRow(
+			`SELECT id, route_number FROM routes WHERE route_number = $1 ORDER BY created_at DESC LIMIT 1`,
+			strings.TrimSpace(req.Route),
+		).Scan(&routeID, &routeNumber)
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid route",
 			})
 		}
 		if err != nil {
@@ -167,6 +190,13 @@ func PurchaseTicket(c *fiber.Ctx) error {
 		})
 	}
 
+	departureDate := strings.TrimSpace(req.DepartureDate)
+	if departureDate == "" {
+		departureDate = time.Now().Format("2006-01-02")
+	}
+	departureTime := strings.TrimSpace(req.DepartureTime)
+	busNumber := strings.TrimSpace(req.BusNumber)
+
 	qrHash, err := generateTicketQRCodeHash()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -193,12 +223,15 @@ func PurchaseTicket(c *fiber.Ctx) error {
 		}
 
 		err = tx.QueryRow(
-			`INSERT INTO tickets (ticket_number, user_id, route_id, from_stop_id, to_stop_id, amount, status, qr_code_hash)
-			 VALUES ($1, $2, $3, $4, $5, $6, 'active', $7)
+			`INSERT INTO tickets (ticket_number, user_id, route_id, bus_number, departure_date, departure_time, from_stop_id, to_stop_id, amount, status, qr_code_hash)
+			 VALUES ($1, $2, $3, $4, $5::date, NULLIF($6, '')::time, $7, $8, $9, 'active', $10)
 			 RETURNING purchase_date`,
 			ticketNumber,
 			userID,
 			routeID,
+			busNumber,
+			departureDate,
+			departureTime,
 			fromStop.id,
 			toStop.id,
 			ticketAmount,
@@ -253,6 +286,9 @@ func PurchaseTicket(c *fiber.Ctx) error {
 			"from_stop_name": fromStop.name,
 			"to_stop_id":     toStop.id,
 			"to_stop_name":   toStop.name,
+			"bus_number":     busNumber,
+			"departure_date": departureDate,
+			"departure_time": departureTime,
 			"amount":         ticketAmount,
 			"status":         "active",
 			"purchase_date":  purchaseDate,

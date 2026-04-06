@@ -7,26 +7,26 @@ type RouteSummary = {
   routeName: string;
 };
 
-const BASE_TIMETABLE = [
-  "05:30",
-  "06:15",
-  "07:00",
-  "07:45",
-  "08:30",
-  "10:00",
-  "11:30",
-  "13:00",
-  "14:30",
-  "16:00",
-  "17:30",
-  "19:00",
-];
+type DepartureItem = {
+  route_id: string;
+  route_number: string;
+  date: string;
+  departure_time: string;
+  bus_number: string;
+  bus_owner: string;
+};
 
 const SummaryPage: React.FC = () => {
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [selectedRouteId, setSelectedRouteId] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [departures, setDepartures] = useState<DepartureItem[]>([]);
+  const [isDepartureLoading, setIsDepartureLoading] = useState(false);
+  const [selectedDeparture, setSelectedDeparture] = useState<DepartureItem | null>(null);
 
   useEffect(() => {
     const loadRoutes = async () => {
@@ -66,27 +66,37 @@ const SummaryPage: React.FC = () => {
     [routes, selectedRouteId]
   );
 
-  const departureTimes = useMemo(() => {
-    if (!selectedRoute) return [];
+  useEffect(() => {
+    const loadDepartures = async () => {
+      if (!selectedRouteId || !selectedDate) {
+        setDepartures([]);
+        return;
+      }
 
-    // Shift baseline timetable per route so each route can have a distinct schedule.
-    const seed = selectedRoute.routeNumber
-      .split("")
-      .reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    const shift = seed % 3;
+      setIsDepartureLoading(true);
+      setError(null);
+      try {
+        const response = await api.get("/departures", {
+          params: {
+            route_id: selectedRouteId,
+            date: selectedDate,
+          },
+        });
 
-    return BASE_TIMETABLE.map((time, index) => {
-      if (index % 3 !== shift) return time;
+        const rows = Array.isArray(response.data?.departures)
+          ? response.data.departures
+          : [];
+        setDepartures(rows);
+      } catch {
+        setDepartures([]);
+        setError("Failed to load departures for selected route/date.");
+      } finally {
+        setIsDepartureLoading(false);
+      }
+    };
 
-      const [hoursText, minutesText] = time.split(":");
-      const hours = Number.parseInt(hoursText, 10);
-      const minutes = Number.parseInt(minutesText, 10) + 10;
-      const adjustedHours = minutes >= 60 ? (hours + 1) % 24 : hours;
-      const adjustedMinutes = minutes >= 60 ? minutes - 60 : minutes;
-
-      return `${String(adjustedHours).padStart(2, "0")}:${String(adjustedMinutes).padStart(2, "0")}`;
-    });
-  }, [selectedRoute]);
+    void loadDepartures();
+  }, [selectedRouteId, selectedDate]);
 
   return (
     <div className="space-y-6">
@@ -132,6 +142,15 @@ const SummaryPage: React.FC = () => {
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
         <h2 className="text-sm font-semibold text-slate-900 mb-1">Departure Timetable</h2>
+        <div className="mb-4 flex items-center gap-3">
+          <label className="text-xs font-medium text-slate-600">Date</label>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
         {selectedRoute ? (
           <p className="text-xs text-slate-500 mb-4">
             Route {selectedRoute.routeNumber}
@@ -141,20 +160,49 @@ const SummaryPage: React.FC = () => {
           <p className="text-xs text-slate-500 mb-4">Choose a route to view departure times.</p>
         )}
 
-        {selectedRoute && (
+        {selectedRoute && !isDepartureLoading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-            {departureTimes.map((time) => (
-              <div
-                key={time}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center"
+            {departures.map((item) => (
+              <button
+                type="button"
+                key={`${item.date}-${item.departure_time}-${item.bus_number}`}
+                onClick={() => setSelectedDeparture(item)}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center hover:bg-blue-50"
               >
                 <p className="text-xs text-slate-500">Departure</p>
-                <p className="text-sm font-semibold text-slate-800">{time}</p>
-              </div>
+                <p className="text-sm font-semibold text-slate-800">{item.departure_time}</p>
+              </button>
             ))}
           </div>
         )}
+
+        {isDepartureLoading && (
+          <p className="text-xs text-slate-500">Loading departures...</p>
+        )}
       </div>
+
+      {selectedDeparture && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl">
+            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-900">Departure Details</h3>
+              <button
+                type="button"
+                onClick={() => setSelectedDeparture(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-2 text-sm text-slate-700">
+              <p><span className="font-medium text-slate-900">Bus owner:</span> {selectedDeparture.bus_owner || "-"}</p>
+              <p><span className="font-medium text-slate-900">Bus number:</span> {selectedDeparture.bus_number || "-"}</p>
+              <p><span className="font-medium text-slate-900">Departure time:</span> {selectedDeparture.departure_time}</p>
+              <p><span className="font-medium text-slate-900">Date:</span> {selectedDeparture.date}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

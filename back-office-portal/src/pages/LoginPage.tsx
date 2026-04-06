@@ -37,7 +37,7 @@ const LoginPage = () => {
 
       const rawRole = (user?.role || "").toString().toLowerCase();
       const isAllowedRole =
-        rawRole === "admin" || rawRole === "bus_owner" || rawRole === "accountant";
+        rawRole === "admin" || rawRole === "bus_owner" || rawRole === "accountant" || rawRole === "time_keeper";
 
       if (!isAllowedRole) {
         setLocalError(

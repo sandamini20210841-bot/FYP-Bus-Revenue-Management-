@@ -20,6 +20,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import SummaryPage from "./pages/SummaryPage";
 import UsersPage from "./pages/UsersPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import BusesPage from "./pages/BusesPage";
 import { type ModuleName, useAccessPermissions } from "./hooks/useAccessPermissions";
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
@@ -119,6 +120,18 @@ function App() {
                 <MainLayout>
                   <RequireModuleAccess moduleName="reports">
                     <ReportsPage />
+                  </RequireModuleAccess>
+                </MainLayout>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/buses"
+            element={
+              <RequireAuth>
+                <MainLayout>
+                  <RequireModuleAccess moduleName="buses">
+                    <BusesPage />
                   </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>

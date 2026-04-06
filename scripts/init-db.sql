@@ -7,7 +7,7 @@ CREATE TABLE users (
   email VARCHAR(255) UNIQUE NOT NULL,
   phone_number VARCHAR(20),
   full_name VARCHAR(255),
-  role VARCHAR(50) DEFAULT 'rider' CHECK (role IN ('rider', 'bus_owner', 'accountant', 'admin')),
+  role VARCHAR(50) DEFAULT 'rider' CHECK (role IN ('rider', 'bus_owner', 'accountant', 'admin', 'time_keeper')),
   password_hash VARCHAR(255),
   profile_photo_url TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -59,6 +59,9 @@ CREATE TABLE tickets (
   ticket_number VARCHAR(9) PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   route_id UUID NOT NULL REFERENCES routes(id) ON DELETE SET NULL,
+  bus_number VARCHAR(50),
+  departure_date DATE,
+  departure_time TIME,
   from_stop_id UUID REFERENCES stops(id) ON DELETE SET NULL,
   to_stop_id UUID REFERENCES stops(id) ON DELETE SET NULL,
   purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -124,7 +127,7 @@ CREATE TABLE alert_settings (
 CREATE TABLE user_access_permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  module_name VARCHAR(50) NOT NULL CHECK (module_name IN ('dashboard', 'discrepancies', 'routes', 'summary', 'reports', 'users', 'audit_logs')),
+  module_name VARCHAR(50) NOT NULL CHECK (module_name IN ('dashboard', 'discrepancies', 'routes', 'buses', 'summary', 'reports', 'users', 'audit_logs')),
   can_create BOOLEAN NOT NULL DEFAULT FALSE,
   can_view BOOLEAN NOT NULL DEFAULT FALSE,
   can_edit BOOLEAN NOT NULL DEFAULT FALSE,
@@ -132,6 +135,18 @@ CREATE TABLE user_access_permissions (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (user_id, module_name)
+);
+
+-- Buses table
+CREATE TABLE buses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+  bus_number VARCHAR(50) NOT NULL,
+  owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (route_id, bus_number)
 );
 
 -- Audit logs table
@@ -156,5 +171,7 @@ CREATE INDEX idx_discrepancies_route_id ON discrepancies(route_id);
 CREATE INDEX idx_discrepancies_date ON discrepancies(transaction_date);
 CREATE INDEX idx_discrepancies_status ON discrepancies(status);
 CREATE INDEX idx_user_access_permissions_user_id ON user_access_permissions(user_id);
+CREATE INDEX idx_buses_route_id ON buses(route_id);
+CREATE INDEX idx_buses_owner_user_id ON buses(owner_user_id);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);

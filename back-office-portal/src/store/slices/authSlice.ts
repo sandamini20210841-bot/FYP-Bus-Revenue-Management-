@@ -4,7 +4,7 @@ interface User {
   id: string;
   email: string;
   fullName: string;
-  role: 'admin' | 'bus_owner' | 'accountant';
+  role: 'admin' | 'bus_owner' | 'accountant' | 'time_keeper';
   permissions: string[];
 }
 

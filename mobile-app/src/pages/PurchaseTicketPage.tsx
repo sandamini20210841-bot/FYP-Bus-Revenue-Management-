@@ -16,6 +16,12 @@ type StopDetail = {
   amount: number | null;
 };
 
+type DepartureOption = {
+  departure_time: string;
+  date: string;
+  bus_number: string;
+};
+
 const PurchaseTicketPage = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -34,6 +40,12 @@ const PurchaseTicketPage = () => {
   const [showBusDropdown, setShowBusDropdown] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
+  const [selectedDepartureDate, setSelectedDepartureDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
+  const [allocatedBusNumber, setAllocatedBusNumber] = useState("");
+  const [routeDepartures, setRouteDepartures] = useState<DepartureOption[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPurchaseComplete, setShowPurchaseComplete] = useState(false);
   const [locationState, setLocationState] = useState<LocationState>({
@@ -224,6 +236,47 @@ const PurchaseTicketPage = () => {
   }, [busNumber, fromValue, toValue, stopsDetailsByRoute]);
 
   useEffect(() => {
+    const loadDepartures = async () => {
+      const routeNumber = busNumber.trim();
+      if (!routeNumber) {
+        setRouteDepartures([]);
+        setSelectedDepartureTime("");
+        setAllocatedBusNumber("");
+        return;
+      }
+
+      try {
+        const response = await api.get("/departures", {
+          params: {
+            route_number: routeNumber,
+            date: selectedDepartureDate,
+          },
+        });
+
+        const rows = Array.isArray(response.data?.departures)
+          ? (response.data.departures as DepartureOption[])
+          : [];
+
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        const filtered = rows.filter((item) => {
+          if (selectedDepartureDate !== today) return true;
+          const [h, m] = (item.departure_time || "00:00").split(":");
+          const departure = new Date();
+          departure.setHours(Number(h || 0), Number(m || 0), 0, 0);
+          return departure.getTime() >= now.getTime();
+        });
+
+        setRouteDepartures(filtered);
+      } catch {
+        setRouteDepartures([]);
+      }
+    };
+
+    void loadDepartures();
+  }, [busNumber, selectedDepartureDate]);
+
+  useEffect(() => {
     if (!("geolocation" in navigator)) {
       setLocationState({
         status: "error",
@@ -299,11 +352,11 @@ const PurchaseTicketPage = () => {
     const to = toValue.trim();
     const amount = Number.parseFloat(amountValue);
 
-    if (!route || !from || !to || Number.isNaN(amount)) {
+    if (!route || !selectedDepartureTime || !allocatedBusNumber || !from || !to || Number.isNaN(amount)) {
       dispatch(
         addNotification({
           id: `ticket-invalid-${Date.now()}`,
-          message: "Select route, stops, and amount",
+          message: "Select route, time, bus number, stops, and amount",
           type: "error",
         })
       );
@@ -313,7 +366,11 @@ const PurchaseTicketPage = () => {
     setIsSubmitting(true);
     try {
       await api.post("/tickets/purchase", {
+        route,
         route_number: route,
+        bus_number: allocatedBusNumber,
+        departure_date: selectedDepartureDate,
+        departure_time: selectedDepartureTime,
         from_stop_name: from,
         to_stop_name: to,
         amount: amount.toFixed(2),
@@ -331,6 +388,8 @@ const PurchaseTicketPage = () => {
 
       setToValue("");
       setAmountValue("");
+      setSelectedDepartureTime("");
+      setAllocatedBusNumber("");
       setShowPurchaseComplete(true);
     } catch {
       dispatch(
@@ -357,7 +416,7 @@ const PurchaseTicketPage = () => {
         >
           <div className="space-y-1.5" ref={busDropdownRef}>
             <label className="block text-xs font-medium text-slate-200">
-              Bus number
+              Route
             </label>
             <div className="relative">
               <input
@@ -372,7 +431,7 @@ const PurchaseTicketPage = () => {
                   setTimeout(() => setShowBusDropdown(false), 120);
                 }}
                 className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 pr-7 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
-                placeholder="Type bus number (e.g. 138)"
+                placeholder="Type route (e.g. 138)"
               />
               <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-400">
                 ▾
@@ -400,6 +459,54 @@ const PurchaseTicketPage = () => {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-200">
+              Date
+            </label>
+            <input
+              type="date"
+              value={selectedDepartureDate}
+              onChange={(e) => setSelectedDepartureDate(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-200">
+              Time
+            </label>
+            <select
+              value={selectedDepartureTime}
+              onChange={(e) => {
+                const time = e.target.value;
+                setSelectedDepartureTime(time);
+                const selected = routeDepartures.find((d) => d.departure_time === time);
+                setAllocatedBusNumber(selected?.bus_number || "");
+              }}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+            >
+              <option value="">Select time</option>
+              {routeDepartures.map((item) => (
+                <option key={`${item.date}-${item.departure_time}`} value={item.departure_time}>
+                  {item.departure_time}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-200">
+              Bus number
+            </label>
+            <input
+              type="text"
+              value={allocatedBusNumber}
+              readOnly
+              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 focus:border-slate-700"
+              placeholder="Auto-selected by time"
+            />
           </div>
 
           <div className="space-y-1.5" ref={fromDropdownRef}>

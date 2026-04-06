@@ -104,6 +104,17 @@ func main() {
 	routes.Put("/:routeId", handlers.UpdateRoute)
 	routes.Delete("/:routeId", handlers.DeleteRoute)
 
+	// Buses management
+	buses := protected.Group("/buses")
+	buses.Post("", handlers.CreateBus)
+	buses.Get("", handlers.GetBuses)
+	buses.Put("/:busId", handlers.UpdateBus)
+	buses.Delete("/:busId", handlers.DeleteBus)
+
+	// Route departures
+	departures := protected.Group("/departures")
+	departures.Get("", handlers.GetRouteDepartures)
+
 	// Transactions
 	transactions := protected.Group("/transactions")
 	transactions.Get("", handlers.GetTransactions)

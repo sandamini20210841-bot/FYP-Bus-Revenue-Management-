@@ -24,6 +24,7 @@ const moduleLabels: Record<string, string> = {
   dashboard: "Dashboard",
   discrepancies: "Discrepancies",
   routes: "Routes",
+  buses: "Buses",
   summary: "Summary",
   reports: "Reports",
   users: "Users",
@@ -32,6 +33,7 @@ const moduleLabels: Record<string, string> = {
 
 const roleLabel = (role: string) => {
   if (role === "bus_owner") return "Bus owner";
+  if (role === "time_keeper") return "Time keeper";
   if (role === "accountant") return "Accountant";
   if (role === "admin") return "Admin";
   return role;
@@ -564,6 +566,7 @@ const UsersPage: React.FC = () => {
                 >
                   <option value="admin">Admin</option>
                   <option value="bus_owner">Bus owner</option>
+                  <option value="time_keeper">Time keeper</option>
                   <option value="accountant">Accountant</option>
                 </select>
               </div>
@@ -708,6 +711,7 @@ const UsersPage: React.FC = () => {
                 >
                   <option value="admin">Admin</option>
                   <option value="bus_owner">Bus owner</option>
+                  <option value="time_keeper">Time keeper</option>
                   <option value="accountant">Accountant</option>
                 </select>
               </div>

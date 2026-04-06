@@ -18,6 +18,7 @@ var allowedAccessModules = []string{
 	"dashboard",
 	"discrepancies",
 	"routes",
+	"buses",
 	"summary",
 	"reports",
 	"users",
@@ -32,7 +33,7 @@ func isAdmin(c *fiber.Ctx) bool {
 func isBackofficeViewer(c *fiber.Ctx) bool {
 	roleClaim, _ := c.Locals("userRole").(string)
 	role := normalizeRole(roleClaim)
-	return role == "admin" || role == "bus_owner" || role == "accountant"
+	return role == "admin" || role == "bus_owner" || role == "accountant" || role == "time_keeper"
 }
 
 func normalizeRole(rawRole string) string {
@@ -48,7 +49,7 @@ func resolveUserUUIDByPublicID(publicID string) (string, error) {
 		`SELECT id
 		 FROM users
 		 WHERE public_id = $1
-		   AND role IN ('admin', 'bus_owner', 'accountant')`,
+		   AND role IN ('admin', 'bus_owner', 'accountant', 'time_keeper')`,
 		publicID,
 	).Scan(&userUUID)
 	if err != nil {
@@ -73,10 +74,14 @@ func roleDefaultPermissions(role string) map[string]accessPermissionState {
 			defaults[module] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: true}
 		}
 	case "bus_owner":
-		for _, module := range []string{"dashboard", "discrepancies", "summary", "reports", "users"} {
+		for _, module := range []string{"dashboard", "discrepancies", "summary", "reports", "buses"} {
 			defaults[module] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
 		}
-		defaults["routes"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
+		defaults["routes"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
+	case "time_keeper":
+		defaults["routes"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: false}
+		defaults["buses"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: false}
+		defaults["summary"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
 	case "accountant":
 		defaults["dashboard"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
 		defaults["discrepancies"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
@@ -287,7 +292,7 @@ func CreateUser(c *fiber.Ctx) error {
 		})
 	}
 
-	if role != "admin" && role != "bus_owner" && role != "accountant" {
+	if role != "admin" && role != "bus_owner" && role != "accountant" && role != "time_keeper" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid role for back-office user",
 		})
@@ -443,7 +448,7 @@ func GetUsers(c *fiber.Ctx) error {
 	rows, err := database.Query(
 		`SELECT public_id, email, COALESCE(full_name, ''), COALESCE(phone_number, ''), role, is_active, created_at, last_login
 		 FROM users
-		 WHERE role IN ('admin', 'bus_owner', 'accountant')
+		 WHERE role IN ('admin', 'bus_owner', 'accountant', 'time_keeper')
 		 ORDER BY created_at DESC
 		 LIMIT $1 OFFSET $2`,
 		limit,
@@ -491,7 +496,7 @@ func GetUsers(c *fiber.Ctx) error {
 	}
 
 	var total int
-	if err := database.QueryRow(`SELECT COUNT(*) FROM users WHERE role IN ('admin', 'bus_owner', 'accountant')`).Scan(&total); err != nil {
+	if err := database.QueryRow(`SELECT COUNT(*) FROM users WHERE role IN ('admin', 'bus_owner', 'accountant', 'time_keeper')`).Scan(&total); err != nil {
 		total = len(users)
 	}
 
@@ -834,7 +839,7 @@ func UpdateUser(c *fiber.Ctx) error {
 	currentRole := ""
 	if isAdmin(c) {
 		roleToUpdate = strings.TrimSpace(strings.ToLower(req.Role))
-		if roleToUpdate != "" && roleToUpdate != "admin" && roleToUpdate != "bus_owner" && roleToUpdate != "accountant" {
+		if roleToUpdate != "" && roleToUpdate != "admin" && roleToUpdate != "bus_owner" && roleToUpdate != "accountant" && roleToUpdate != "time_keeper" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Invalid role for back-office user",
 			})

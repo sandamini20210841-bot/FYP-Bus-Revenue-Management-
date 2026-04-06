@@ -5,6 +5,7 @@ export type ModuleName =
   | "dashboard"
   | "discrepancies"
   | "routes"
+  | "buses"
   | "summary"
   | "reports"
   | "users"
@@ -24,6 +25,7 @@ const ALL_MODULES: ModuleName[] = [
   "dashboard",
   "discrepancies",
   "routes",
+  "buses",
   "summary",
   "reports",
   "users",
@@ -81,7 +83,7 @@ const buildRoleDefaultMap = (role: string): PermissionMap => {
   }
 
   if (role === "bus_owner") {
-    ["dashboard", "discrepancies", "summary", "reports", "users"].forEach((moduleName) => {
+    ["dashboard", "discrepancies", "summary", "reports", "buses"].forEach((moduleName) => {
       map[moduleName] = {
         module_name: moduleName,
         can_create: false,
@@ -95,10 +97,35 @@ const buildRoleDefaultMap = (role: string): PermissionMap => {
       module_name: "routes",
       can_create: false,
       can_view: true,
-      can_edit: true,
-      can_delete: true,
+      can_edit: false,
+      can_delete: false,
     };
 
+    return map;
+  }
+
+  if (role === "time_keeper") {
+    map.routes = {
+      module_name: "routes",
+      can_create: true,
+      can_view: true,
+      can_edit: true,
+      can_delete: false,
+    };
+    map.buses = {
+      module_name: "buses",
+      can_create: true,
+      can_view: true,
+      can_edit: true,
+      can_delete: false,
+    };
+    map.summary = {
+      module_name: "summary",
+      can_create: false,
+      can_view: true,
+      can_edit: false,
+      can_delete: false,
+    };
     return map;
   }
 

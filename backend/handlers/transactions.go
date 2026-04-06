@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,9 @@ import (
 
 // GetTransactions retrieves all transactions
 func GetTransactions(c *fiber.Ctx) error {
+	role := normalizeRole(strings.TrimSpace(fmt.Sprint(c.Locals("userRole"))))
+	actorUserID := strings.TrimSpace(fmt.Sprint(c.Locals("userId")))
+
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 10)
 	if page < 1 {
@@ -62,6 +66,14 @@ func GetTransactions(c *fiber.Ctx) error {
 		args = append(args, status)
 		argPos++
 	}
+	if role == "bus_owner" && actorUserID != "" && actorUserID != "<nil>" {
+		whereParts = append(whereParts, `t.bus_number IN (
+			SELECT b.bus_number FROM buses b
+			WHERE b.owner_user_id = $`+itoa(argPos)+` OR b.created_by = $`+itoa(argPos)+`
+		)`)
+		args = append(args, actorUserID)
+		argPos++
+	}
 
 	whereClause := ""
 	if len(whereParts) > 0 {
@@ -83,6 +95,7 @@ func GetTransactions(c *fiber.Ctx) error {
 		SELECT
 			tr.id,
 			COALESCE(r.route_number, ''),
+			COALESCE(t.bus_number, ''),
 			COALESCE(tr.ticket_id, ''),
 			tr.transaction_date,
 			tr.amount,
@@ -105,6 +118,7 @@ func GetTransactions(c *fiber.Ctx) error {
 	for rows.Next() {
 		var id string
 		var routeNumber string
+		var busNumber string
 		var ticketNumber string
 		var transactionDate time.Time
 		var amount float64
@@ -112,26 +126,27 @@ func GetTransactions(c *fiber.Ctx) error {
 		var toStop sql.NullString
 		var trStatus string
 
-		if err := rows.Scan(&id, &routeNumber, &ticketNumber, &transactionDate, &amount, &fromStop, &toStop, &trStatus); err != nil {
+		if err := rows.Scan(&id, &routeNumber, &busNumber, &ticketNumber, &transactionDate, &amount, &fromStop, &toStop, &trStatus); err != nil {
 			continue
 		}
 
 		transactions = append(transactions, fiber.Map{
-			"id": id,
-			"route_number": routeNumber,
-			"ticket_number": ticketNumber,
+			"id":               id,
+			"route_number":     routeNumber,
+			"bus_number":       busNumber,
+			"ticket_number":    ticketNumber,
 			"transaction_date": transactionDate,
-			"amount": amount,
-			"from_stop_name": fromStop.String,
-			"to_stop_name": toStop.String,
-			"status": trStatus,
+			"amount":           amount,
+			"from_stop_name":   fromStop.String,
+			"to_stop_name":     toStop.String,
+			"status":           trStatus,
 		})
 	}
 
 	return c.JSON(fiber.Map{
 		"transactions": transactions,
 		"pagination": fiber.Map{
-			"page": page,
+			"page":  page,
 			"limit": limit,
 			"total": total,
 		},

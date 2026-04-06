@@ -56,6 +56,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   const roleLabel = useMemo(() => {
     if (rawRole === "bus_owner") return "Bus owner";
+    if (rawRole === "time_keeper") return "Time keeper";
     if (rawRole === "accountant") return "Accountant";
     return "Admin";
   }, [rawRole]);
@@ -247,6 +248,33 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               </svg>
             </span>
             <span>Routes</span>
+          </NavLink>
+          )}
+
+          {canView("buses") && (
+          <NavLink
+            to="/buses"
+            className={({ isActive }) =>
+              `${navLinkBaseClasses} ${
+                isActive
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`
+            }
+          >
+            <span className="text-lg">
+              <svg
+                className="h-5 w-5 text-slate-600"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect x="3.5" y="5" width="13" height="7" rx="1.6" stroke="currentColor" strokeWidth="1.4" />
+                <circle cx="7" cy="13.5" r="1" fill="currentColor" />
+                <circle cx="13" cy="13.5" r="1" fill="currentColor" />
+              </svg>
+            </span>
+            <span>Buses</span>
           </NavLink>
           )}
 
