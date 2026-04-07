@@ -8,6 +8,7 @@ type ReportTransaction = {
   id: string;
   route_number: string;
   ticket_number: string;
+  bus_number: string;
   transaction_date: string;
   amount: number;
   from_stop_name: string;
@@ -49,6 +50,7 @@ const ReportsPage: React.FC = () => {
     const header = [
       "Route",
       "Ticket Number",
+      "Bus Number",
       "Date",
       "Time",
       "Amount (Rs.)",
@@ -65,6 +67,7 @@ const ReportsPage: React.FC = () => {
       return [
         tr.route_number || "",
         tr.ticket_number || "",
+        tr.bus_number || "",
         dateLabel,
         timeLabel,
         Number(tr.amount || 0).toFixed(2),
@@ -136,6 +139,7 @@ const ReportsPage: React.FC = () => {
         id: row.id || "",
         route_number: row.route_number || "-",
         ticket_number: row.ticket_number || "-",
+        bus_number: row.bus_number || "-",
         transaction_date: row.transaction_date || "",
         amount: typeof row.amount === "number" ? row.amount : Number.parseFloat(row.amount || "0"),
         from_stop_name: row.from_stop_name || "-",
@@ -663,6 +667,7 @@ const ReportsPage: React.FC = () => {
               <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="py-2 pr-4 font-semibold">Route</th>
                 <th className="py-2 pr-4 font-semibold">Ticket Number</th>
+                <th className="py-2 pr-4 font-semibold">Bus Number</th>
                 <th className="py-2 pr-4 font-semibold">Date</th>
                 <th className="py-2 pr-4 font-semibold">Time</th>
                 <th className="py-2 pr-4 font-semibold">Amount</th>
@@ -674,7 +679,7 @@ const ReportsPage: React.FC = () => {
               {isLoadingTransactions && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="py-6 text-center text-[11px] text-slate-400"
                   >
                     Loading transactions...
@@ -685,7 +690,7 @@ const ReportsPage: React.FC = () => {
               {!isLoadingTransactions && transactionsError && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="py-6 text-center text-[11px] text-red-500"
                   >
                     {transactionsError}
@@ -696,7 +701,7 @@ const ReportsPage: React.FC = () => {
               {!isLoadingTransactions && !transactionsError && filteredTransactions.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="py-6 text-center text-[11px] text-slate-400"
                   >
                     Transaction data will appear here once tickets are purchased.
@@ -717,6 +722,7 @@ const ReportsPage: React.FC = () => {
                   <tr key={tr.id} className="border-b border-slate-100 last:border-b-0">
                     <td className="py-3 pr-4">{tr.route_number || "-"}</td>
                     <td className="py-3 pr-4">{tr.ticket_number || "-"}</td>
+                    <td className="py-3 pr-4">{tr.bus_number || "-"}</td>
                     <td className="py-3 pr-4">{dateLabel}</td>
                     <td className="py-3 pr-4">{timeLabel}</td>
                     <td className="py-3 pr-4 text-emerald-600 font-semibold">Rs. {Number(tr.amount || 0).toFixed(2)}</td>
@@ -728,6 +734,7 @@ const ReportsPage: React.FC = () => {
             </tbody>
             <tfoot>
               <tr className="border-t border-slate-200 bg-slate-100/70 text-sm text-slate-700">
+                <td className="py-3 pr-4" />
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-4" />

@@ -55,6 +55,26 @@ const PurchaseTicketPage = () => {
   const busDropdownRef = useRef<HTMLDivElement | null>(null);
   const fromDropdownRef = useRef<HTMLDivElement | null>(null);
   const toDropdownRef = useRef<HTMLDivElement | null>(null);
+  const dateInputRef = useRef<HTMLInputElement | null>(null);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const isPastDate = (dateText: string): boolean => {
+    if (!dateText) return false;
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const [y, m, d] = dateText.split("-").map((v) => Number(v));
+    if (!y || !m || !d) return false;
+    const selected = new Date(y, m - 1, d);
+    return selected.getTime() < todayStart.getTime();
+  };
+
+  const openDateCalendar = () => {
+    const input = dateInputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+    if (input?.showPicker) {
+      input.showPicker();
+    }
+  };
 
   const reverseGeocode = async (lat: number, lon: number): Promise<string | null> => {
     try {
@@ -245,6 +265,13 @@ const PurchaseTicketPage = () => {
         return;
       }
 
+      if (isPastDate(selectedDepartureDate)) {
+        setRouteDepartures([]);
+        setSelectedDepartureTime("");
+        setAllocatedBusNumber("");
+        return;
+      }
+
       try {
         const response = await api.get("/departures", {
           params: {
@@ -260,7 +287,8 @@ const PurchaseTicketPage = () => {
         const now = new Date();
         const today = now.toISOString().slice(0, 10);
         const filtered = rows.filter((item) => {
-          if (selectedDepartureDate !== today) return true;
+          if (selectedDepartureDate > today) return true;
+          if (selectedDepartureDate < today) return false;
           const [h, m] = (item.departure_time || "00:00").split(":");
           const departure = new Date();
           departure.setHours(Number(h || 0), Number(m || 0), 0, 0);
@@ -275,6 +303,17 @@ const PurchaseTicketPage = () => {
 
     void loadDepartures();
   }, [busNumber, selectedDepartureDate]);
+
+  useEffect(() => {
+    if (!selectedDepartureTime) return;
+    const selectedStillValid = routeDepartures.some(
+      (item) => item.departure_time === selectedDepartureTime
+    );
+    if (!selectedStillValid) {
+      setSelectedDepartureTime("");
+      setAllocatedBusNumber("");
+    }
+  }, [routeDepartures, selectedDepartureTime]);
 
   useEffect(() => {
     if (!("geolocation" in navigator)) {
@@ -357,6 +396,31 @@ const PurchaseTicketPage = () => {
         addNotification({
           id: `ticket-invalid-${Date.now()}`,
           message: "Select route, time, bus number, stops, and amount",
+          type: "error",
+        })
+      );
+      return;
+    }
+
+    if (isPastDate(selectedDepartureDate)) {
+      dispatch(
+        addNotification({
+          id: `ticket-past-date-${Date.now()}`,
+          message: "Past dates are not allowed",
+          type: "error",
+        })
+      );
+      return;
+    }
+
+    const [h, m] = selectedDepartureTime.split(":").map((v) => Number(v));
+    const [y, mo, d] = selectedDepartureDate.split("-").map((v) => Number(v));
+    const departureDateTime = new Date(y, (mo || 1) - 1, d || 1, h || 0, m || 0, 0, 0);
+    if (departureDateTime.getTime() < Date.now()) {
+      dispatch(
+        addNotification({
+          id: `ticket-past-time-${Date.now()}`,
+          message: "Selected departure time has already passed",
           type: "error",
         })
       );
@@ -466,9 +530,20 @@ const PurchaseTicketPage = () => {
               Date
             </label>
             <input
+              ref={dateInputRef}
               type="date"
               value={selectedDepartureDate}
-              onChange={(e) => setSelectedDepartureDate(e.target.value)}
+              min={todayIso}
+              onClick={openDateCalendar}
+              onFocus={openDateCalendar}
+              onChange={(e) => {
+                const nextDate = e.target.value;
+                if (isPastDate(nextDate)) {
+                  setSelectedDepartureDate(todayIso);
+                  return;
+                }
+                setSelectedDepartureDate(nextDate);
+              }}
               className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
             />
           </div>

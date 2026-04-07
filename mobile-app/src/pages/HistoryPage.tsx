@@ -8,11 +8,19 @@ type HistoryTicket = {
   ticketNumber: string;
   qrCodeHash: string;
   routeNumber: string;
+  busNumber: string;
+  departureTime: string;
   from: string;
   to: string;
   amount: number;
   purchasedAt: string;
   status: string;
+};
+
+const normalizeDisplayValue = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 };
 
 const HistoryPage = () => {
@@ -73,8 +81,10 @@ const HistoryPage = () => {
             ticketNumber: ticket.ticket_number || ticket.id || "",
             qrCodeHash: ticket.qr_code_hash || "",
             routeNumber: ticket.route_number || ticket.routeNumber || "",
-            from: ticket.from_stop_name || ticket.from || "-",
-            to: ticket.to_stop_name || ticket.to || "-",
+            busNumber: ticket.bus_number || "",
+            departureTime: ticket.departure_time || "",
+            from: ticket.from_stop_name || ticket.from || "",
+            to: ticket.to_stop_name || ticket.to || "",
             amount: Number.isNaN(rawAmount) ? 0 : rawAmount,
             purchasedAt: ticket.purchase_date || ticket.purchasedAt || new Date().toISOString(),
             status: ticket.status || "completed",
@@ -128,6 +138,14 @@ const HistoryPage = () => {
           ) : (
             <div className="space-y-2">
               {filteredTickets.map((ticket) => (
+                (() => {
+                  const normalizedStatus = (ticket.status || "").toString().toLowerCase();
+                  const statusBadgeClass =
+                    normalizedStatus === "expired"
+                      ? "rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-300"
+                      : "rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300";
+
+                  return (
                 <article
                   key={ticket.id}
                   className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 cursor-pointer hover:bg-slate-900/80"
@@ -145,20 +163,28 @@ const HistoryPage = () => {
                     Route {ticket.routeNumber}
                   </p>
                   <p className="mt-1 text-xs text-slate-300">
-                    Start destination: {ticket.from}
+                    Bus number: {normalizeDisplayValue(ticket.busNumber) || "--"}
                   </p>
                   <p className="mt-1 text-xs text-slate-300">
-                    End destination: {ticket.to}
+                    Departure time: {normalizeDisplayValue(ticket.departureTime) || "--"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    Start destination: {normalizeDisplayValue(ticket.from) || "--"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    End destination: {normalizeDisplayValue(ticket.to) || "--"}
                   </p>
                   <div className="mt-2 flex items-center justify-between text-xs">
                     <span className="text-emerald-300">
                       LKR {ticket.amount.toFixed(2)}
                     </span>
-                    <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
+                    <span className={statusBadgeClass}>
                       {ticket.status}
                     </span>
                   </div>
                 </article>
+                  );
+                })()
               ))}
             </div>
           )}

@@ -345,13 +345,18 @@ func GetUserTickets(c *fiber.Ctx) error {
 			 COALESCE(t.qr_code_hash, ''),
 			 t.route_id,
 			 COALESCE(r.route_number, ''),
+			 COALESCE(t.bus_number, ''),
+			 COALESCE(TO_CHAR(t.departure_time, 'HH24:MI'), ''),
 			 t.from_stop_id,
 			 COALESCE(fs.stop_name, ''),
 			 t.to_stop_id,
 			 COALESCE(ts.stop_name, ''),
 			 t.purchase_date,
 			 t.amount,
-			 t.status
+			 CASE
+				 WHEN LOWER(COALESCE(t.status, '')) = 'active' AND t.purchase_date <= (NOW() - INTERVAL '2 hours') THEN 'expired'
+				 ELSE COALESCE(t.status, 'active')
+			 END AS effective_status
 		 FROM tickets t
 		 LEFT JOIN routes r ON r.id = t.route_id
 		 LEFT JOIN stops fs ON fs.id = t.from_stop_id
@@ -376,6 +381,8 @@ func GetUserTickets(c *fiber.Ctx) error {
 		var qrCodeHash string
 		var routeID string
 		var routeNumber string
+		var busNumber string
+		var departureTime string
 		var fromStopID sql.NullString
 		var fromStopName string
 		var toStopID sql.NullString
@@ -389,6 +396,8 @@ func GetUserTickets(c *fiber.Ctx) error {
 			&qrCodeHash,
 			&routeID,
 			&routeNumber,
+			&busNumber,
+			&departureTime,
 			&fromStopID,
 			&fromStopName,
 			&toStopID,
@@ -406,6 +415,8 @@ func GetUserTickets(c *fiber.Ctx) error {
 			"qr_code_hash":   qrCodeHash,
 			"route_id":       routeID,
 			"route_number":   routeNumber,
+			"bus_number":     busNumber,
+			"departure_time": departureTime,
 			"from_stop_id":   fromStopID.String,
 			"from_stop_name": fromStopName,
 			"to_stop_id":     toStopID.String,
@@ -699,7 +710,10 @@ func getValidatedTicketDetails(ticketNumber string, qrHash string) (validatedTic
 			 COALESCE(ts.stop_name, ''),
 			 t.amount,
 			 t.purchase_date,
-			 t.status,
+			 CASE
+				 WHEN LOWER(COALESCE(t.status, '')) = 'active' AND t.purchase_date <= (NOW() - INTERVAL '2 hours') THEN 'expired'
+				 ELSE COALESCE(t.status, 'active')
+			 END AS effective_status,
 			 COALESCE(t.qr_code_hash, '')
 		 FROM tickets t
 		 LEFT JOIN routes r ON r.id = t.route_id
