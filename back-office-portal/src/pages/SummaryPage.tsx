@@ -11,6 +11,7 @@ type DepartureItem = {
   route_id: string;
   route_number: string;
   date: string;
+  turn_number?: number;
   departure_time: string;
   bus_number: string;
   bus_owner: string;
@@ -165,7 +166,7 @@ const SummaryPage: React.FC = () => {
             {departures.map((item) => (
               <button
                 type="button"
-                key={`${item.date}-${item.departure_time}-${item.bus_number}`}
+                key={`${item.date}-${item.departure_time}-${item.bus_number}-${item.turn_number || ""}`}
                 onClick={() => setSelectedDeparture(item)}
                 className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center hover:bg-blue-50"
               >

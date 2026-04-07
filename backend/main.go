@@ -115,6 +115,16 @@ func main() {
 	departures := protected.Group("/departures")
 	departures.Get("", handlers.GetRouteDepartures)
 
+	// Timetable management
+	timetables := protected.Group("/timetables")
+	timetables.Get("/setup", handlers.GetTimetableSetup)
+	timetables.Post("/setup", handlers.UpsertTimetableSetup)
+	timetables.Get("/calendar", handlers.GetTimetableCalendar)
+	timetables.Get("/entries", handlers.GetTimetableEntries)
+	timetables.Post("/entries", handlers.UpsertTimetableEntry)
+	timetables.Delete("/entries", handlers.DeleteTimetableEntry)
+	timetables.Delete("/date", handlers.DeleteTimetableDate)
+
 	// Transactions
 	transactions := protected.Group("/transactions")
 	transactions.Get("", handlers.GetTransactions)

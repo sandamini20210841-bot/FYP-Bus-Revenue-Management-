@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
 import api from "../utils/axios";
 import { useAccessPermissions } from "../hooks/useAccessPermissions";
+import { RootState } from "../store";
 
 type BusRow = {
   id: string;
@@ -20,6 +22,10 @@ const BusesPage: React.FC = () => {
   const canCreateBus = canCreate("buses");
   const canEditBus = canEdit("buses");
   const canDeleteBus = canDelete("buses");
+  const currentRole = (useSelector((state: RootState) => state.auth.user?.role) || "")
+    .toString()
+    .toLowerCase();
+  const showBusOwnerColumn = currentRole === "admin" || currentRole === "time_keeper";
 
   const [buses, setBuses] = useState<BusRow[]>([]);
   const [routes, setRoutes] = useState<RouteOption[]>([]);
@@ -33,6 +39,8 @@ const BusesPage: React.FC = () => {
 
   const [editingBus, setEditingBus] = useState<BusRow | null>(null);
   const [isDeleteBusyId, setIsDeleteBusyId] = useState<string | null>(null);
+  const [busPendingDelete, setBusPendingDelete] = useState<BusRow | null>(null);
+  const tableColumnCount = (showBusOwnerColumn ? 1 : 0) + (canEditBus || canDeleteBus ? 1 : 0) + 2;
 
   const loadBuses = async () => {
     setLoading(true);
@@ -121,16 +129,25 @@ const BusesPage: React.FC = () => {
     }
   };
 
-  const deleteBus = async (bus: BusRow) => {
+  const openDeleteModal = (bus: BusRow) => {
     if (!canDeleteBus || isDeleteBusyId) return;
-    const confirmed = window.confirm(`Delete bus ${bus.bus_number} from route ${bus.route_number}?`);
-    if (!confirmed) return;
+    setBusPendingDelete(bus);
+  };
 
-    setIsDeleteBusyId(bus.id);
+  const closeDeleteModal = () => {
+    if (isDeleteBusyId) return;
+    setBusPendingDelete(null);
+  };
+
+  const confirmDeleteBus = async () => {
+    if (!canDeleteBus || isDeleteBusyId || !busPendingDelete) return;
+
+    setIsDeleteBusyId(busPendingDelete.id);
     setError(null);
     try {
-      await api.delete(`/buses/${bus.id}`);
+      await api.delete(`/buses/${busPendingDelete.id}`);
       await loadBuses();
+      setBusPendingDelete(null);
     } catch (err: any) {
       setError(err?.response?.data?.error || "Failed to delete bus.");
     } finally {
@@ -165,31 +182,31 @@ const BusesPage: React.FC = () => {
               <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="py-2 pr-4 font-semibold">Route</th>
                 <th className="py-2 pr-4 font-semibold">Bus Number</th>
-                <th className="py-2 pr-4 font-semibold">Bus Owner</th>
+                {showBusOwnerColumn && <th className="py-2 pr-4 font-semibold">Bus Owner</th>}
                 {(canEditBus || canDeleteBus) && <th className="py-2 pr-0 font-semibold">Action</th>}
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={canEditBus || canDeleteBus ? 4 : 3} className="py-6 text-center text-[11px] text-slate-400">Loading buses...</td>
+                  <td colSpan={tableColumnCount} className="py-6 text-center text-[11px] text-slate-400">Loading buses...</td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={canEditBus || canDeleteBus ? 4 : 3} className="py-6 text-center text-[11px] text-red-500">{error}</td>
+                  <td colSpan={tableColumnCount} className="py-6 text-center text-[11px] text-red-500">{error}</td>
                 </tr>
               )}
               {!loading && !error && buses.length === 0 && (
                 <tr>
-                  <td colSpan={canEditBus || canDeleteBus ? 4 : 3} className="py-6 text-center text-[11px] text-slate-400">No buses found.</td>
+                  <td colSpan={tableColumnCount} className="py-6 text-center text-[11px] text-slate-400">No buses found.</td>
                 </tr>
               )}
               {!loading && !error && buses.map((bus) => (
                 <tr key={bus.id} className="border-b border-slate-100 last:border-b-0">
                   <td className="py-3 pr-4">{bus.route_number || "-"}</td>
                   <td className="py-3 pr-4">{bus.bus_number || "-"}</td>
-                  <td className="py-3 pr-4">{bus.owner_name || "-"}</td>
+                  {showBusOwnerColumn && <td className="py-3 pr-4">{bus.owner_name || "-"}</td>}
                   {(canEditBus || canDeleteBus) && (
                     <td className="py-3 pr-0">
                       <div className="flex items-center gap-2">
@@ -198,6 +215,7 @@ const BusesPage: React.FC = () => {
                             type="button"
                             onClick={() => openEditModal(bus)}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100"
+                            aria-label={`Edit ${bus.bus_number}`}
                             title="Edit bus"
                           >
                             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
@@ -209,9 +227,10 @@ const BusesPage: React.FC = () => {
                         {canDeleteBus && (
                           <button
                             type="button"
-                            onClick={() => { void deleteBus(bus); }}
+                            onClick={() => openDeleteModal(bus)}
                             disabled={isDeleteBusyId === bus.id}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            aria-label={`Delete ${bus.bus_number}`}
                             title="Delete bus"
                           >
                             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
@@ -279,6 +298,40 @@ const BusesPage: React.FC = () => {
                 className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               >
                 {isSubmitting ? "Saving..." : editingBus ? "Save Changes" : "Create Bus"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {busPendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-900">Delete Bus</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Are you sure you want to delete {busPendingDelete.bus_number} from route {busPendingDelete.route_number}? This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                disabled={isDeleteBusyId === busPendingDelete.id}
+                className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void confirmDeleteBus();
+                }}
+                disabled={isDeleteBusyId === busPendingDelete.id}
+                className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isDeleteBusyId === busPendingDelete.id ? "Deleting..." : "Yes"}
               </button>
             </div>
           </div>

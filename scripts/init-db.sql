@@ -127,7 +127,7 @@ CREATE TABLE alert_settings (
 CREATE TABLE user_access_permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  module_name VARCHAR(50) NOT NULL CHECK (module_name IN ('dashboard', 'discrepancies', 'routes', 'buses', 'summary', 'reports', 'users', 'audit_logs')),
+  module_name VARCHAR(50) NOT NULL CHECK (module_name IN ('dashboard', 'discrepancies', 'routes', 'buses', 'summary', 'timetable', 'reports', 'users', 'audit_logs')),
   can_create BOOLEAN NOT NULL DEFAULT FALSE,
   can_view BOOLEAN NOT NULL DEFAULT FALSE,
   can_edit BOOLEAN NOT NULL DEFAULT FALSE,
@@ -147,6 +147,29 @@ CREATE TABLE buses (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (route_id, bus_number)
+);
+
+-- Timetable setup per route
+CREATE TABLE timetable_setups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  route_id UUID NOT NULL UNIQUE REFERENCES routes(id) ON DELETE CASCADE,
+  total_turns INT NOT NULL CHECK (total_turns > 0 AND total_turns <= 200),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Timetable entries per date/turn
+CREATE TABLE timetable_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+  service_date DATE NOT NULL,
+  turn_number INT NOT NULL CHECK (turn_number > 0),
+  bus_number VARCHAR(50) NOT NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (route_id, service_date, turn_number)
 );
 
 -- Audit logs table
@@ -173,5 +196,6 @@ CREATE INDEX idx_discrepancies_status ON discrepancies(status);
 CREATE INDEX idx_user_access_permissions_user_id ON user_access_permissions(user_id);
 CREATE INDEX idx_buses_route_id ON buses(route_id);
 CREATE INDEX idx_buses_owner_user_id ON buses(owner_user_id);
+CREATE INDEX idx_timetable_entries_route_date ON timetable_entries(route_id, service_date);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);

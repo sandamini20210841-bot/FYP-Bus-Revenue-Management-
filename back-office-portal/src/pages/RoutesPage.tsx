@@ -25,10 +25,94 @@ interface RouteDefinition {
   stops: RouteStop[];
 }
 
+interface RouteSectionForm {
+  id: number;
+  name: string;
+  isCollapsed: boolean;
+  stops: RouteStop[];
+}
+
+type GroupedStopSection = {
+  sectionName: string;
+  sectionStop: RouteStop | null;
+  subStops: RouteStop[];
+};
+
 const DEFAULT_ROUTE_COORDINATES = {
   lat: 6.9271,
   lon: 79.8612,
 };
+
+const splitStopHierarchy = (stopName: string) => {
+  const value = stopName.trim();
+  if (!value) {
+    return { section: "Unnamed section", subSection: "" };
+  }
+
+  const separators = [" > ", " -> ", " - ", " : ", " | ", "/"];
+  for (const separator of separators) {
+    if (value.includes(separator)) {
+      const parts = value
+        .split(separator)
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0);
+      if (parts.length >= 2) {
+        return {
+          section: parts[0],
+          subSection: parts.slice(1).join(" / "),
+        };
+      }
+    }
+  }
+
+  return { section: value, subSection: "" };
+};
+
+const groupStopsBySection = (stops: RouteStop[]): GroupedStopSection[] => {
+  const groupedMap = new Map<string, GroupedStopSection>();
+
+  stops.forEach((stop) => {
+    const parsed = splitStopHierarchy(stop.name || "");
+    const sectionKey = parsed.section || "Unnamed section";
+
+    if (!groupedMap.has(sectionKey)) {
+      groupedMap.set(sectionKey, {
+        sectionName: sectionKey,
+        sectionStop: null,
+        subStops: [],
+      });
+    }
+
+    const bucket = groupedMap.get(sectionKey)!;
+    if (!parsed.subSection) {
+      bucket.sectionStop = stop;
+      return;
+    }
+
+    bucket.subStops.push({
+      ...stop,
+      name: parsed.subSection,
+    });
+  });
+
+  return Array.from(groupedMap.values());
+};
+
+const createEmptyStop = (id: number): RouteStop => ({
+  id,
+  name: "",
+  distance: "",
+  amount: "",
+  amountError: null,
+  distanceError: null,
+});
+
+const createEmptySection = (id: number): RouteSectionForm => ({
+  id,
+  name: "",
+  isCollapsed: false,
+  stops: [createEmptyStop(1)],
+});
 
 const RoutesPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -47,15 +131,8 @@ const RoutesPage: React.FC = () => {
     DEFAULT_ROUTE_COORDINATES
   );
   const [stopsError, setStopsError] = useState<string | null>(null);
-  const [stops, setStops] = useState<RouteStop[]>([ 
-    { 
-      id: 1, 
-      name: "", 
-      distance: "", 
-      amount: "", 
-      amountError: null, 
-      distanceError: null, 
-    }, 
+  const [sections, setSections] = useState<RouteSectionForm[]>([
+    createEmptySection(1),
   ]);
   const [routes, setRoutes] = useState<RouteDefinition[]>([]);
   const [editingRoute, setEditingRoute] = useState<RouteDefinition | null>(
@@ -67,26 +144,66 @@ const RoutesPage: React.FC = () => {
   const [isDeletingRoute, setIsDeletingRoute] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleAddStop = () => {
-    setStops((prev) => [
+  const handleAddSection = () => {
+    setSections((prev) => [
       ...prev,
-      {
-        id: prev.length ? prev[prev.length - 1].id + 1 : 1,
-        name: "",
-        distance: "",
-        amount: "",
-        amountError: null,
-        distanceError: null,
-      },
+      createEmptySection(prev.length ? prev[prev.length - 1].id + 1 : 1),
     ]);
   };
 
-  const handleRemoveStop = (id: number) => {
-    setStops((prev) => {
-      if (prev.length === 1) return prev; // always keep at least one row
-      const updated = prev.filter((stop) => stop.id !== id);
+  const handleRemoveSection = (sectionId: number) => {
+    setSections((prev) => {
+      if (prev.length === 1) return prev;
+      const updated = prev.filter((section) => section.id !== sectionId);
       return updated.length ? updated : prev;
     });
+  };
+
+  const toggleSectionCollapsed = (sectionId: number) => {
+    setSections((prev) =>
+      prev.map((section) =>
+        section.id === sectionId
+          ? { ...section, isCollapsed: !section.isCollapsed }
+          : section
+      )
+    );
+  };
+
+  const handleSectionNameChange = (sectionId: number, value: string) => {
+    setSections((prev) =>
+      prev.map((section) =>
+        section.id === sectionId ? { ...section, name: value } : section
+      )
+    );
+  };
+
+  const handleAddStopToSection = (sectionId: number) => {
+    setSections((prev) =>
+      prev.map((section) => {
+        if (section.id !== sectionId) return section;
+        const nextStopId = section.stops.length
+          ? section.stops[section.stops.length - 1].id + 1
+          : 1;
+        return {
+          ...section,
+          stops: [...section.stops, createEmptyStop(nextStopId)],
+        };
+      })
+    );
+  };
+
+  const handleRemoveStopFromSection = (sectionId: number, stopId: number) => {
+    setSections((prev) =>
+      prev.map((section) => {
+        if (section.id !== sectionId) return section;
+        if (section.stops.length === 1) return section;
+        const updatedStops = section.stops.filter((stop) => stop.id !== stopId);
+        return {
+          ...section,
+          stops: updatedStops.length ? updatedStops : section.stops,
+        };
+      })
+    );
   };
 
   const [expandedRouteIds, setExpandedRouteIds] = useState<number[]>([]);
@@ -117,39 +234,87 @@ const RoutesPage: React.FC = () => {
         .map((l) => l.trim())
         .filter((l) => l.length > 0);
 
-      const importedStops: RouteStop[] = [];
-      lines.forEach((line, index) => {
-        const parts = line.split(",").map((p) => p.trim());
-        if (parts.length < 5) return;
+      const parsedRows = lines.map((line) =>
+        line
+          .split(",")
+          .map((part) => part.trim().replace(/^"|"$/g, ""))
+      );
+      if (!parsedRows.length) {
+        setStopsError("CSV file is empty.");
+        return;
+      }
 
-        const [, rawName, rawDistance, , rawAmount] = parts;
-        if (!rawName || !rawAmount) return;
+      const header = parsedRows[0].map((value) =>
+        value.toLowerCase().replace(/\s+/g, "_")
+      );
 
-        const name = rawName.trim();
-        const distanceRaw = rawDistance ?? "";
-        const distanceNumeric = distanceRaw.replace(/[^0-9.]/g, "");
-        const amountRaw = rawAmount.trim();
+      const indexOfFirst = (...candidates: string[]) =>
+        candidates
+          .map((name) => header.indexOf(name))
+          .find((idx) => idx >= 0) ?? -1;
+
+      const sectionIdx = indexOfFirst("section", "main_section", "section_name");
+      const subStopIdx = indexOfFirst("sub_stop", "sub_section", "stop", "stop_name", "sub_stop_name");
+      const amountIdx = indexOfFirst("amount", "fare", "fare_amount");
+
+      const hasNewTemplateColumns = sectionIdx >= 0 && subStopIdx >= 0 && amountIdx >= 0;
+      const dataRows = hasNewTemplateColumns ? parsedRows.slice(1) : parsedRows;
+
+      const importedSections = new Map<string, RouteStop[]>();
+
+      dataRows.forEach((parts) => {
+        let sectionName = "";
+        let subStopName = "";
+        let amountRaw = "";
+
+        if (hasNewTemplateColumns) {
+          sectionName = (parts[sectionIdx] || "").trim();
+          subStopName = (parts[subStopIdx] || "").trim();
+          amountRaw = (parts[amountIdx] || "").trim();
+        } else {
+          // Backward compatibility for older 5-column sheet format.
+          if (parts.length < 5) return;
+          const rawName = (parts[1] || "").trim();
+          const parsed = splitStopHierarchy(rawName);
+          sectionName = (parsed.section || "").trim();
+          subStopName = (parsed.subSection || parsed.section || "").trim();
+          amountRaw = (parts[4] || "").trim();
+        }
+
         const amountNumeric = amountRaw.replace(/[^0-9.]/g, "");
-        if (!name || !amountNumeric) return;
+        if (!sectionName || !subStopName || !amountNumeric) return;
 
-        importedStops.push({
-          id: index + 1,
-          name,
-          distance: distanceNumeric,
+        if (!importedSections.has(sectionName)) {
+          importedSections.set(sectionName, []);
+        }
+
+        importedSections.get(sectionName)!.push({
+          id: importedSections.get(sectionName)!.length + 1,
+          name: subStopName,
+          distance: "",
           amount: amountNumeric,
           amountError: null,
           distanceError: null,
         });
       });
 
-      if (!importedStops.length) {
+      if (!importedSections.size) {
         setStopsError(
-          "Could not find any valid stops in the CSV. Expected: stop id, stop name, distance, fare stage, amount."
+          "Could not find valid rows. Expected columns: section, sub_stop, amount."
         );
         return;
       }
 
-      setStops(importedStops);
+      const nextSections: RouteSectionForm[] = Array.from(importedSections.entries()).map(
+        ([name, importedStops], index) => ({
+          id: index + 1,
+          name,
+          isCollapsed: false,
+          stops: importedStops.length ? importedStops : [createEmptyStop(1)],
+        })
+      );
+
+      setSections(nextSections);
       setStopsError(null);
     };
 
@@ -157,42 +322,49 @@ const RoutesPage: React.FC = () => {
   };
 
   const handleStopChange = (
-    id: number,
+    sectionId: number,
+    stopId: number,
     field: "name" | "distance" | "amount",
     value: string
   ) => {
-    setStops((prev) =>
-      prev.map((stop) =>
-        stop.id === id
-          ? (() => {
-              if (field === "amount") {
-                const raw = value;
-                const numeric = raw.replace(/[^0-9.]/g, "");
-                return {
-                  ...stop,
-                  amount: numeric,
-                  amountError:
-                    raw && raw !== numeric
-                      ? "Only numbers are allowed in this field."
-                      : null,
-                };
-              }
-              if (field === "distance") {
-                const raw = value;
-                const numeric = raw.replace(/[^0-9.]/g, "");
-                return {
-                  ...stop,
-                  distance: numeric,
-                  distanceError:
-                    raw && raw !== numeric
-                      ? "Only numbers are allowed in this field."
-                      : null,
-                };
-              }
-              return { ...stop, name: value };
-            })()
-          : stop
-      )
+    setSections((prev) =>
+      prev.map((section) => {
+        if (section.id !== sectionId) return section;
+        return {
+          ...section,
+          stops: section.stops.map((stop) =>
+            stop.id === stopId
+              ? (() => {
+                  if (field === "amount") {
+                    const raw = value;
+                    const numeric = raw.replace(/[^0-9.]/g, "");
+                    return {
+                      ...stop,
+                      amount: numeric,
+                      amountError:
+                        raw && raw !== numeric
+                          ? "Only numbers are allowed in this field."
+                          : null,
+                    };
+                  }
+                  if (field === "distance") {
+                    const raw = value;
+                    const numeric = raw.replace(/[^0-9.]/g, "");
+                    return {
+                      ...stop,
+                      distance: numeric,
+                      distanceError:
+                        raw && raw !== numeric
+                          ? "Only numbers are allowed in this field."
+                          : null,
+                    };
+                  }
+                  return { ...stop, name: value };
+                })()
+              : stop
+          ),
+        };
+      })
     );
   };
 
@@ -207,16 +379,7 @@ const RoutesPage: React.FC = () => {
     setRouteNameError(null);
     setRouteCoordinates(DEFAULT_ROUTE_COORDINATES);
     setStopsError(null);
-    setStops([
-      {
-        id: 1,
-        name: "",
-        distance: "",
-        amount: "",
-        amountError: null,
-        distanceError: null,
-      },
-    ]);
+    setSections([createEmptySection(1)]);
     setIsModalOpen(true);
   };
 
@@ -238,14 +401,42 @@ const RoutesPage: React.FC = () => {
       lon: route.longitude ?? DEFAULT_ROUTE_COORDINATES.lon,
     });
     setStopsError(null);
-    setStops(
-      route.stops.map((s, index) => ({
-        ...s,
+    const grouped = groupStopsBySection(route.stops);
+    const mappedSections = grouped.map((section, index) => {
+      const parsedSectionStops: RouteStop[] = [];
+
+      if (section.sectionStop) {
+        const parsed = splitStopHierarchy(section.sectionStop.name || "");
+        const sectionStopName = parsed.subSection || parsed.section || section.sectionName;
+        parsedSectionStops.push({
+          ...section.sectionStop,
+          id: parsedSectionStops.length + 1,
+          name: sectionStopName,
+          amountError: null,
+          distanceError: null,
+        });
+      }
+
+      section.subStops.forEach((stop) => {
+        parsedSectionStops.push({
+          ...stop,
+          id: parsedSectionStops.length + 1,
+          amountError: null,
+          distanceError: null,
+        });
+      });
+
+      return {
         id: index + 1,
-        amountError: null,
-        distanceError: null,
-      }))
-    );
+        name: section.sectionName,
+        isCollapsed: false,
+        stops: parsedSectionStops.length
+          ? parsedSectionStops
+          : [createEmptyStop(1)],
+      };
+    });
+
+    setSections(mappedSections.length ? mappedSections : [createEmptySection(1)]);
     setIsModalOpen(true);
   };
 
@@ -322,18 +513,28 @@ const RoutesPage: React.FC = () => {
       setRouteNameError(null);
     }
 
-    const hasValidStop = stops.some(
-      (stop) =>
-        stop.name.trim() !== "" &&
-        stop.amount.trim() !== "" &&
-        !stop.amountError
+    const hasValidSection = sections.some((section) => section.name.trim() !== "");
+    const hasValidStop = sections.some((section) =>
+      section.stops.some(
+        (stop) =>
+          section.name.trim() !== "" &&
+          stop.name.trim() !== "" &&
+          stop.amount.trim() !== "" &&
+          !stop.amountError
+      )
     );
+
+    if (!hasValidSection) {
+      setStopsError("Add at least one section name.");
+      missingMessages.push("At least one section is required");
+      isValid = false;
+    }
 
     if (!hasValidStop) {
       setStopsError(
-        "Add at least one stop with both a name and an amount."
+        "Add at least one stop with section, stop name and amount."
       );
-      missingMessages.push("At least one stop with name and amount is required");
+      missingMessages.push("At least one stop with section, name and amount is required");
       isValid = false;
     } else {
       setStopsError(null);
@@ -354,6 +555,25 @@ const RoutesPage: React.FC = () => {
       return;
     }
 
+    const flattenedStops = sections.flatMap((section) =>
+      section.stops
+        .filter((s) => s.name.trim().length > 0)
+        .map((s) => {
+          const sectionName = section.name.trim();
+          const stopName = s.name.trim();
+          const composedName =
+            !sectionName || sectionName === stopName
+              ? stopName
+              : `${sectionName} - ${stopName}`;
+
+          return {
+            name: composedName,
+            distance: s.distance.trim(),
+            amount: s.amount.trim(),
+          };
+        })
+    );
+
     // Persist to backend and update local list
     const payload = {
       route_number: routeNumber,
@@ -361,13 +581,7 @@ const RoutesPage: React.FC = () => {
       description: routeName,
       latitude: routeCoordinates.lat,
       longitude: routeCoordinates.lon,
-      stops: stops
-        .filter((s) => s.name.trim().length > 0)
-        .map((s) => ({
-          name: s.name.trim(),
-          distance: s.distance.trim(),
-          amount: s.amount.trim(),
-        })),
+      stops: flattenedStops,
     };
 
     setIsSavingRoute(true);
@@ -384,7 +598,14 @@ const RoutesPage: React.FC = () => {
                   routeName,
                   latitude: routeCoordinates.lat,
                   longitude: routeCoordinates.lon,
-                  stops: stops.map((s) => ({ ...s })),
+                  stops: flattenedStops.map((s, idx) => ({
+                    id: idx + 1,
+                    name: s.name,
+                    distance: s.distance,
+                    amount: s.amount,
+                    amountError: null,
+                    distanceError: null,
+                  })),
                 }
               : r
           )
@@ -413,7 +634,14 @@ const RoutesPage: React.FC = () => {
             routeName,
             latitude: routeCoordinates.lat,
             longitude: routeCoordinates.lon,
-            stops: stops.map((s) => ({ ...s })),
+            stops: flattenedStops.map((s, idx) => ({
+              id: idx + 1,
+              name: s.name,
+              distance: s.distance,
+              amount: s.amount,
+              amountError: null,
+              distanceError: null,
+            })),
           },
         ]);
 
@@ -647,10 +875,9 @@ const RoutesPage: React.FC = () => {
 
                   {isExpanded && (
                     <div className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600 space-y-2">
-                      <div className="hidden sm:grid grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(80px,auto),minmax(64px,auto),minmax(80px,auto)] gap-2 pb-1 text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                        <span className="text-center">Stop Id</span>
-                        <span>Stop Name</span>
-                        <span className="text-right pr-2">Distance</span>
+                      <div className="hidden sm:grid grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(64px,auto),minmax(80px,auto)] gap-2 pb-1 text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+                        <span className="text-center">Section</span>
+                        <span>Section / Sub section</span>
                         <span className="block w-full text-center leading-tight -translate-x-1">
                           Fare
                           <br />
@@ -659,19 +886,32 @@ const RoutesPage: React.FC = () => {
                         <span className="text-right">Amount</span>
                       </div>
                       <div className="space-y-1">
-                        {route.stops.map((stop, index) => {
-                          const stopCode = `S${String(index + 1).padStart(3, "0")}`;
-                          const fareStage = index + 1;
+                        {groupStopsBySection(route.stops).map((section, sectionIndex) => {
+                          const sectionCode = `SEC${String(sectionIndex + 1).padStart(2, "0")}`;
+
                           return (
-                            <div
-                              key={stop.id}
-                              className="flex flex-col sm:grid sm:grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(80px,auto),minmax(64px,auto),minmax(80px,auto)] gap-2"
-                            >
-                              <span className="text-center">{stopCode}</span>
-                              <span>{stop.name || "-"}</span>
-                              <span className="text-right">{stop.distance || "-"}</span>
-                              <span className="text-center">{fareStage}</span>
-                              <span className="text-right">{stop.amount || "-"}</span>
+                            <div key={`${route.id}-${section.sectionName}-${sectionIndex}`} className="space-y-1">
+                              <div className="flex flex-col sm:grid sm:grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(64px,auto),minmax(80px,auto)] gap-2 rounded-md bg-slate-50 px-2 py-1.5">
+                                <span className="text-center font-semibold text-slate-700">{sectionCode}</span>
+                                <span className="font-semibold text-slate-800">{section.sectionName}</span>
+                                <span className="text-center">{sectionIndex + 1}</span>
+                                <span className="text-right">{section.sectionStop?.amount || "-"}</span>
+                              </div>
+
+                              {section.subStops.map((subStop, subIndex) => {
+                                const subCode = `${sectionCode}.${subIndex + 1}`;
+                                return (
+                                  <div
+                                    key={`${route.id}-${section.sectionName}-sub-${subStop.id}-${subIndex}`}
+                                    className="flex flex-col sm:grid sm:grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(64px,auto),minmax(80px,auto)] gap-2 pl-2"
+                                  >
+                                    <span className="text-center text-slate-500">{subCode}</span>
+                                    <span className="text-slate-700">↳ {subStop.name || "-"}</span>
+                                    <span className="text-center">{sectionIndex + 1}.{subIndex + 1}</span>
+                                    <span className="text-right">{subStop.amount || "-"}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           );
                         })}
@@ -687,7 +927,7 @@ const RoutesPage: React.FC = () => {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-40 flex items-start justify-center bg-slate-900/40 overflow-y-auto py-10">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">
@@ -772,16 +1012,16 @@ const RoutesPage: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-medium text-slate-700">
-                    Stops <span className="text-red-500">*</span>
+                    Sections and Stops <span className="text-red-500">*</span>
                   </label>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={handleAddStop}
+                      onClick={handleAddSection}
                       className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                     >
                       <span className="text-sm">+</span>
-                      <span>Add stop</span>
+                      <span>Add section</span>
                     </button>
                     <button
                       type="button"
@@ -804,104 +1044,129 @@ const RoutesPage: React.FC = () => {
                   onChange={handleImportStops}
                   className="hidden"
                 />
-                <div className="hidden sm:grid grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(80px,auto),minmax(64px,auto),minmax(80px,auto)] gap-2 px-1 pb-1 text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-                  <span className="text-center">Stop Id</span>
-                  <span>Stop Name</span>
-                  <span className="text-right pr-2">Distance</span>
-                  <span className="block w-full text-center leading-tight -translate-x-1">
-                    Fare
-                    <br />
-                    Stage
-                  </span>
-                  <span className="text-right">Amount</span>
-                </div>
-
                 <div className="space-y-3 pr-1">
-                  {stops.map((stop, index) => {
-                    const stopCode = `S${String(index + 1).padStart(3, "0")}`;
-                    const fareStage = index + 1;
-                    return (
-                      <div key={stop.id} className="space-y-1">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                          <div className="flex items-center gap-2 min-w-[72px]">
-                            {stops.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveStop(stop.id)}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-sm"
-                                aria-label="Remove stop"
-                              >
-                                -
-                              </button>
-                            )}
-                            <div className="flex-1 flex items-center justify-center px-3 py-2 rounded-lg border border-slate-100 bg-slate-50 text-[11px] text-slate-600">
-                              {stopCode}
-                            </div>
-                          </div>
-
-                          <input
-                            type="text"
-                            value={stop.name}
-                            onChange={(e) =>
-                              handleStopChange(
-                                stop.id,
-                                "name",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Stop name"
-                            className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-
-                          <input
-                            type="text"
-                            value={stop.distance}
-                            onChange={(e) =>
-                              handleStopChange(
-                                stop.id,
-                                "distance",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Distance"
-                            className="w-full sm:w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-
-                          <div className="flex items-center justify-center px-3 py-2 rounded-lg border border-slate-100 bg-slate-50 text-[11px] text-slate-600 min-w-[56px]">
-                            {fareStage}
-                          </div>
-
-                          <input
-                            type="text"
-                            value={stop.amount}
-                            onChange={(e) =>
-                              handleStopChange(
-                                stop.id,
-                                "amount",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Amount"
-                            className="w-full sm:w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        </div>
-                        {(stop.distanceError || stop.amountError) && (
-                          <div className="flex flex-col sm:flex-row gap-2 text-[11px]">
-                            {stop.distanceError && (
-                              <span className="text-red-500">
-                                {stop.distanceError}
-                              </span>
-                            )}
-                            {stop.amountError && (
-                              <span className="text-red-500">
-                                {stop.amountError}
-                              </span>
-                            )}
-                          </div>
+                  {sections.map((section, sectionIndex) => (
+                    <div key={section.id} className="rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => toggleSectionCollapsed(section.id)}
+                          className="h-7 w-7 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+                          aria-label={section.isCollapsed ? "Expand section" : "Collapse section"}
+                        >
+                          {section.isCollapsed ? "▸" : "▾"}
+                        </button>
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                          Section {sectionIndex + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={section.name}
+                          onChange={(e) => handleSectionNameChange(section.id, e.target.value)}
+                          placeholder="Section name (main stop)"
+                          className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        {sections.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSection(section.id)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50"
+                            aria-label="Remove section"
+                            title="Remove section"
+                          >
+                            -
+                          </button>
                         )}
                       </div>
-                    );
-                  })}
+
+                      {!section.isCollapsed && (
+                        <div className="p-3 space-y-3">
+                          <div className="hidden sm:grid grid-cols-[minmax(88px,auto),minmax(0,2fr),minmax(72px,auto),minmax(96px,auto)] gap-2 px-1 pb-1 text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+                            <span className="text-center">Stop Id</span>
+                            <span>Sub Section / Stop</span>
+                            <span className="block w-full text-center leading-tight -translate-x-1">
+                              Fare
+                              <br />
+                              Stage
+                            </span>
+                            <span className="text-right">Amount</span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {section.stops.map((stop, stopIndex) => {
+                              const stopCode = `S${String(sectionIndex + 1).padStart(2, "0")}.${String(stopIndex + 1).padStart(2, "0")}`;
+                              const fareStage = `${sectionIndex + 1}.${stopIndex + 1}`;
+
+                              return (
+                                <div key={`${section.id}-${stop.id}`} className="space-y-1">
+                                  <div className="flex flex-col sm:grid sm:grid-cols-[minmax(88px,auto),minmax(0,2fr),minmax(72px,auto),minmax(96px,auto)] sm:items-center gap-2">
+                                    <div className="flex items-center gap-1">
+                                      {section.stops.length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveStopFromSection(section.id, stop.id)}
+                                          className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-sm"
+                                          aria-label="Remove stop"
+                                        >
+                                          -
+                                        </button>
+                                      )}
+                                      {section.stops.length <= 1 && <span className="h-7 w-7" />}
+                                      <div className="flex-1 flex items-center justify-center px-3 py-2 rounded-lg border border-slate-100 bg-slate-50 text-[11px] text-slate-600">
+                                        {stopCode}
+                                      </div>
+                                    </div>
+
+                                    <input
+                                      type="text"
+                                      value={stop.name}
+                                      onChange={(e) =>
+                                        handleStopChange(section.id, stop.id, "name", e.target.value)
+                                      }
+                                      placeholder="Sub section / stop name"
+                                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+
+                                    <div className="flex items-center justify-center px-3 py-2 rounded-lg border border-slate-100 bg-slate-50 text-[11px] text-slate-600 min-w-[56px]">
+                                      {fareStage}
+                                    </div>
+
+                                    <input
+                                      type="text"
+                                      value={stop.amount}
+                                      onChange={(e) =>
+                                        handleStopChange(section.id, stop.id, "amount", e.target.value)
+                                      }
+                                      placeholder="Amount"
+                                      className="w-full sm:w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                  </div>
+                                  {stop.amountError && (
+                                    <div className="flex flex-col sm:flex-row gap-2 text-[11px]">
+                                      {stop.amountError && (
+                                        <span className="text-red-500">{stop.amountError}</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => handleAddStopToSection(section.id)}
+                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              <span className="text-sm">+</span>
+                              <span>Add stop to section</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
                 {stopsError && (
                   <p className="mt-1 text-[11px] text-red-500">{stopsError}</p>

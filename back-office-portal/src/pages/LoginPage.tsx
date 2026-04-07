@@ -71,7 +71,9 @@ const LoginPage = () => {
 
       clearPermissionCache();
 
-      navigate(from, { replace: true });
+      const homePath = rawRole === "time_keeper" ? "/routes" : "/dashboard";
+      const targetPath = from === "/" ? homePath : from;
+      navigate(targetPath, { replace: true });
     } catch (error) {
       console.error("Login failed", error);
       const axiosErr = error as AxiosError<{ error?: string }>;

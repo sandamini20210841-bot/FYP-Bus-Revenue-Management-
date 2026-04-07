@@ -20,6 +20,7 @@ var allowedAccessModules = []string{
 	"routes",
 	"buses",
 	"summary",
+	"timetable",
 	"reports",
 	"users",
 	"audit_logs",
@@ -48,8 +49,8 @@ func resolveUserUUIDByPublicID(publicID string) (string, error) {
 	err := database.QueryRow(
 		`SELECT id
 		 FROM users
-		 WHERE public_id = $1
-		   AND role IN ('admin', 'bus_owner', 'accountant', 'time_keeper')`,
+		 WHERE (public_id = $1 OR id::text = $1)
+		   AND REPLACE(REPLACE(LOWER(TRIM(role)), ' ', '_'), '-', '_') IN ('admin', 'bus_owner', 'accountant', 'time_keeper')`,
 		publicID,
 	).Scan(&userUUID)
 	if err != nil {
@@ -74,14 +75,16 @@ func roleDefaultPermissions(role string) map[string]accessPermissionState {
 			defaults[module] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: true}
 		}
 	case "bus_owner":
-		for _, module := range []string{"dashboard", "discrepancies", "summary", "reports", "buses"} {
+		for _, module := range []string{"dashboard", "discrepancies", "summary", "reports"} {
 			defaults[module] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
 		}
+		defaults["buses"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: true}
 		defaults["routes"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
 	case "time_keeper":
 		defaults["routes"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: false}
 		defaults["buses"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: false}
 		defaults["summary"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
+		defaults["timetable"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: true}
 	case "accountant":
 		defaults["dashboard"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
 		defaults["discrepancies"] = accessPermissionState{canCreate: false, canView: true, canEdit: true, canDelete: true}
@@ -284,7 +287,7 @@ func CreateUser(c *fiber.Ctx) error {
 	fullName := strings.TrimSpace(req.FullName)
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 	phoneNumber := strings.TrimSpace(req.PhoneNumber)
-	role := strings.TrimSpace(strings.ToLower(req.Role))
+	role := normalizeRole(req.Role)
 
 	if fullName == "" || email == "" || role == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -382,36 +385,24 @@ func CreateUser(c *fiber.Ctx) error {
 		})
 	}
 
-	if role == "bus_owner" {
-		defaultViewModules := []string{"dashboard", "discrepancies", "summary", "reports", "users"}
-		for _, moduleName := range defaultViewModules {
-			_, permErr := database.Exec(
-				`INSERT INTO user_access_permissions (user_id, module_name, can_create, can_view, can_edit, can_delete)
-				 VALUES ($1, $2, FALSE, TRUE, FALSE, FALSE)
-				 ON CONFLICT (user_id, module_name)
-				 DO UPDATE SET can_create = FALSE, can_view = TRUE, can_edit = FALSE, can_delete = FALSE, updated_at = NOW()`,
-				user.ID,
-				moduleName,
-			)
-			if permErr != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": "Failed to initialize bus owner access permissions",
-				})
-			}
-		}
+	tx, txErr := database.PostgresDB.Begin()
+	if txErr != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to initialize user access permissions",
+		})
+	}
+	defer tx.Rollback()
 
-		_, routesPermErr := database.Exec(
-			`INSERT INTO user_access_permissions (user_id, module_name, can_create, can_view, can_edit, can_delete)
-			 VALUES ($1, 'routes', FALSE, TRUE, TRUE, TRUE)
-			 ON CONFLICT (user_id, module_name)
-			 DO UPDATE SET can_create = FALSE, can_view = TRUE, can_edit = TRUE, can_delete = TRUE, updated_at = NOW()`,
-			user.ID,
-		)
-		if routesPermErr != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to initialize bus owner routes access permissions",
-			})
-		}
+	if permErr := resetUserPermissionsToRoleDefaults(tx, user.ID, role); permErr != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to initialize user access permissions",
+		})
+	}
+
+	if commitErr := tx.Commit(); commitErr != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to finalize user access permissions",
+		})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -446,9 +437,9 @@ func GetUsers(c *fiber.Ctx) error {
 	offset := (page - 1) * limit
 
 	rows, err := database.Query(
-		`SELECT public_id, email, COALESCE(full_name, ''), COALESCE(phone_number, ''), role, is_active, created_at, last_login
+		`SELECT COALESCE(NULLIF(public_id, ''), id::text), email, COALESCE(full_name, ''), COALESCE(phone_number, ''), role, is_active, created_at, last_login
 		 FROM users
-		 WHERE role IN ('admin', 'bus_owner', 'accountant', 'time_keeper')
+		 WHERE REPLACE(REPLACE(LOWER(TRIM(role)), ' ', '_'), '-', '_') IN ('admin', 'bus_owner', 'accountant', 'time_keeper')
 		 ORDER BY created_at DESC
 		 LIMIT $1 OFFSET $2`,
 		limit,
@@ -496,7 +487,7 @@ func GetUsers(c *fiber.Ctx) error {
 	}
 
 	var total int
-	if err := database.QueryRow(`SELECT COUNT(*) FROM users WHERE role IN ('admin', 'bus_owner', 'accountant', 'time_keeper')`).Scan(&total); err != nil {
+	if err := database.QueryRow(`SELECT COUNT(*) FROM users WHERE REPLACE(REPLACE(LOWER(TRIM(role)), ' ', '_'), '-', '_') IN ('admin', 'bus_owner', 'accountant', 'time_keeper')`).Scan(&total); err != nil {
 		total = len(users)
 	}
 
@@ -838,7 +829,7 @@ func UpdateUser(c *fiber.Ctx) error {
 	roleToUpdate := ""
 	currentRole := ""
 	if isAdmin(c) {
-		roleToUpdate = strings.TrimSpace(strings.ToLower(req.Role))
+		roleToUpdate = normalizeRole(req.Role)
 		if roleToUpdate != "" && roleToUpdate != "admin" && roleToUpdate != "bus_owner" && roleToUpdate != "accountant" && roleToUpdate != "time_keeper" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Invalid role for back-office user",

@@ -18,10 +18,23 @@ import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import SummaryPage from "./pages/SummaryPage";
+import TimetablePage from "./pages/TimetablePage";
 import UsersPage from "./pages/UsersPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import BusesPage from "./pages/BusesPage";
 import { type ModuleName, useAccessPermissions } from "./hooks/useAccessPermissions";
+
+const RoleHomeRedirect = () => {
+  const role = (useSelector((state: RootState) => state.auth.user?.role) || "")
+    .toString()
+    .toLowerCase();
+
+  if (role === "time_keeper") {
+    return <Navigate to="/routes" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
+};
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
   const location = useLocation();
@@ -79,6 +92,14 @@ function App() {
           {/* Main Routes (protected) */}
           <Route
             path="/"
+            element={
+              <RequireAuth>
+                <RoleHomeRedirect />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/dashboard"
             element={
               <RequireAuth>
                 <MainLayout>
@@ -144,6 +165,18 @@ function App() {
                 <MainLayout>
                   <RequireModuleAccess moduleName="summary">
                     <SummaryPage />
+                  </RequireModuleAccess>
+                </MainLayout>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/timetable"
+            element={
+              <RequireAuth>
+                <MainLayout>
+                  <RequireModuleAccess moduleName="timetable">
+                    <TimetablePage />
                   </RequireModuleAccess>
                 </MainLayout>
               </RequireAuth>

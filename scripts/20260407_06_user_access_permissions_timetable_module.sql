@@ -1,6 +1,5 @@
 BEGIN;
 
--- Refresh module_name constraint to include buses.
 DO $$
 DECLARE
     c RECORD;

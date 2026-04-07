@@ -323,6 +323,34 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </NavLink>
           )}
 
+          {canView("timetable") && (
+          <NavLink
+            to="/timetable"
+            className={({ isActive }) =>
+              `${navLinkBaseClasses} ${
+                isActive
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`
+            }
+          >
+            <span className="text-lg">
+              <svg
+                className="h-5 w-5 text-slate-600"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect x="3" y="4" width="14" height="13" rx="1.8" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M3 8H17" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <path d="M7 3V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <path d="M13 3V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span>Timetable</span>
+          </NavLink>
+          )}
+
           {canView("reports") && (
           <NavLink
             to="/reports"

@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS user_access_permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  module_name VARCHAR(50) NOT NULL CHECK (module_name IN ('dashboard', 'discrepancies', 'routes', 'buses', 'summary', 'reports', 'users', 'audit_logs')),
+  module_name VARCHAR(50) NOT NULL CHECK (module_name IN ('dashboard', 'discrepancies', 'routes', 'buses', 'summary', 'timetable', 'reports', 'users', 'audit_logs')),
   can_create BOOLEAN NOT NULL DEFAULT FALSE,
   can_view BOOLEAN NOT NULL DEFAULT FALSE,
   can_edit BOOLEAN NOT NULL DEFAULT FALSE,
