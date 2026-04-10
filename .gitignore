@@ -5,6 +5,8 @@ node_modules/
 # Ignore environment files
 .env
 .env.*
+!.env.example
+!**/.env.example
 
 # Ignore frontend build outputs
 back-office-portal/dist/
