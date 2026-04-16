@@ -131,10 +131,12 @@ func main() {
 
 	// Discrepancies
 	discrepancies := protected.Group("/discrepancies")
+	discrepancies.Post("", handlers.CreateDiscrepancy)
+	discrepancies.Post("/analyze", handlers.AnalyzeDiscrepancies)
 	discrepancies.Get("", handlers.GetDiscrepancies)
+	discrepancies.Get("/stats", handlers.GetDiscrepancyStats)
 	discrepancies.Get("/:id", handlers.GetDiscrepancy)
 	discrepancies.Put("/:id/status", handlers.UpdateDiscrepancyStatus)
-	discrepancies.Get("/stats", handlers.GetDiscrepancyStats)
 
 	// Dashboard
 	dashboard := protected.Group("/dashboard")

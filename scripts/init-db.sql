@@ -58,7 +58,7 @@ CREATE TABLE stops (
 CREATE TABLE tickets (
   ticket_number VARCHAR(9) PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  route_id UUID NOT NULL REFERENCES routes(id) ON DELETE SET NULL,
+  route_id UUID REFERENCES routes(id) ON DELETE SET NULL,
   bus_number VARCHAR(50),
   departure_date DATE,
   departure_time TIME,

@@ -466,11 +466,16 @@ const RoutesPage: React.FC = () => {
           read: false,
         })
       );
-    } catch {
+    } catch (error: any) {
+      const backendMessage =
+        (typeof error?.response?.data?.error === "string" &&
+          error.response.data.error.trim()) ||
+        "Failed to delete route. Please try again.";
+
       dispatch(
         addNotification({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          message: "Failed to delete route. Please try again.",
+          message: backendMessage,
           type: "error",
           timestamp: new Date().toISOString(),
           read: false,
@@ -874,28 +879,32 @@ const RoutesPage: React.FC = () => {
                   </button>
 
                   {isExpanded && (
-                    <div className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600 space-y-2">
-                      <div className="hidden sm:grid grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(64px,auto),minmax(80px,auto)] gap-2 pb-1 text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                        <span className="text-center">Section</span>
-                        <span>Section / Sub section</span>
-                        <span className="block w-full text-center leading-tight -translate-x-1">
+                    <div className="mt-4 border-t border-slate-100 pt-4 text-xs text-slate-600">
+                      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="hidden sm:grid grid-cols-[minmax(80px,auto),minmax(0,2fr),minmax(72px,auto),minmax(96px,auto)] gap-3 border-b border-slate-200 bg-slate-50/90 px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-[0.08em]">
+                          <span className="text-center">Section</span>
+                          <span>Section / Sub Section</span>
+                          <span className="block w-full text-center leading-tight">
                           Fare
                           <br />
                           Stage
                         </span>
-                        <span className="text-right">Amount</span>
-                      </div>
-                      <div className="space-y-1">
-                        {groupStopsBySection(route.stops).map((section, sectionIndex) => {
+                          <span className="text-right">Amount</span>
+                        </div>
+
+                        <div className="space-y-1 p-2">
+                          {groupStopsBySection(route.stops).map((section, sectionIndex) => {
                           const sectionCode = `SEC${String(sectionIndex + 1).padStart(2, "0")}`;
 
                           return (
-                            <div key={`${route.id}-${section.sectionName}-${sectionIndex}`} className="space-y-1">
-                              <div className="flex flex-col sm:grid sm:grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(64px,auto),minmax(80px,auto)] gap-2 rounded-md bg-slate-50 px-2 py-1.5">
-                                <span className="text-center font-semibold text-slate-700">{sectionCode}</span>
+                            <div key={`${route.id}-${section.sectionName}-${sectionIndex}`} className="space-y-1.5">
+                              <div className="flex flex-col sm:grid sm:grid-cols-[minmax(80px,auto),minmax(0,2fr),minmax(72px,auto),minmax(96px,auto)] gap-3 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50 px-3 py-2">
+                                <span className="inline-flex items-center justify-center rounded-md bg-blue-100 px-2 py-0.5 text-center font-semibold tracking-wide text-blue-700">
+                                  {sectionCode}
+                                </span>
                                 <span className="font-semibold text-slate-800">{section.sectionName}</span>
-                                <span className="text-center">{sectionIndex + 1}</span>
-                                <span className="text-right">{section.sectionStop?.amount || "-"}</span>
+                                <span className="text-center font-medium text-slate-700">{sectionIndex + 1}</span>
+                                <span className="text-right font-semibold text-slate-800">{section.sectionStop?.amount || "-"}</span>
                               </div>
 
                               {section.subStops.map((subStop, subIndex) => {
@@ -903,18 +912,19 @@ const RoutesPage: React.FC = () => {
                                 return (
                                   <div
                                     key={`${route.id}-${section.sectionName}-sub-${subStop.id}-${subIndex}`}
-                                    className="flex flex-col sm:grid sm:grid-cols-[minmax(72px,auto),minmax(0,2fr),minmax(64px,auto),minmax(80px,auto)] gap-2 pl-2"
+                                    className="flex flex-col sm:grid sm:grid-cols-[minmax(80px,auto),minmax(0,2fr),minmax(72px,auto),minmax(96px,auto)] gap-3 rounded-md px-3 py-1.5 pl-5 transition-colors hover:bg-slate-50/80"
                                   >
                                     <span className="text-center text-slate-500">{subCode}</span>
                                     <span className="text-slate-700">↳ {subStop.name || "-"}</span>
-                                    <span className="text-center">{sectionIndex + 1}.{subIndex + 1}</span>
-                                    <span className="text-right">{subStop.amount || "-"}</span>
+                                    <span className="text-center text-slate-600">{sectionIndex + 1}.{subIndex + 1}</span>
+                                    <span className="text-right font-medium text-slate-700">{subStop.amount || "-"}</span>
                                   </div>
                                 );
                               })}
                             </div>
                           );
-                        })}
+                          })}
+                        </div>
                       </div>
                     </div>
                   )}

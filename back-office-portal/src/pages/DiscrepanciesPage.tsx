@@ -1,9 +1,35 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import api from "../utils/axios";
 
 type DiscrepancyStatus = "pending" | "investigating" | "escalated" | "resolved";
 type DiscrepancySeverity = "low" | "medium" | "high" | "critical";
 
-const statusOptions: { label: string; value: DiscrepancyStatus | "all" }[] = [
+type DiscrepancyItem = {
+  id: string;
+  route_number: string;
+  bus_number: string;
+  transaction_date: string;
+  expected_revenue: number;
+  expected_daily: number;
+  expected_weekly: number;
+  expected_monthly: number;
+  actual_revenue: number;
+  actual_weekly: number;
+  actual_monthly: number;
+  loss_amount: number;
+  anomaly_score: number;
+  status: DiscrepancyStatus;
+  severity: DiscrepancySeverity;
+  notes: string;
+  detection_method: string;
+};
+
+type DiscrepancyStats = {
+  totalDiscrepancies: number;
+  totalLoss: number;
+};
+
+const statusOptions: Array<{ label: string; value: DiscrepancyStatus | "all" }> = [
   { label: "All Statuses", value: "all" },
   { label: "Pending", value: "pending" },
   { label: "Investigating", value: "investigating" },
@@ -11,7 +37,7 @@ const statusOptions: { label: string; value: DiscrepancyStatus | "all" }[] = [
   { label: "Resolved", value: "resolved" },
 ];
 
-const severityOptions: { label: string; value: DiscrepancySeverity | "all" }[] = [
+const severityOptions: Array<{ label: string; value: DiscrepancySeverity | "all" }> = [
   { label: "All Severities", value: "all" },
   { label: "Low", value: "low" },
   { label: "Medium", value: "medium" },
@@ -19,241 +45,319 @@ const severityOptions: { label: string; value: DiscrepancySeverity | "all" }[] =
   { label: "Critical", value: "critical" },
 ];
 
+const severityBadgeClass = (severity: DiscrepancySeverity) => {
+  switch (severity) {
+    case "critical":
+      return "border-red-300 bg-red-50 text-red-700";
+    case "high":
+      return "border-orange-300 bg-orange-50 text-orange-700";
+    case "medium":
+      return "border-amber-300 bg-amber-50 text-amber-700";
+    default:
+      return "border-slate-300 bg-slate-50 text-slate-700";
+  }
+};
+
+const statusBadgeClass = (status: DiscrepancyStatus) => {
+  switch (status) {
+    case "resolved":
+      return "border-emerald-300 bg-emerald-50 text-emerald-700";
+    case "investigating":
+      return "border-blue-300 bg-blue-50 text-blue-700";
+    case "escalated":
+      return "border-red-300 bg-red-50 text-red-700";
+    default:
+      return "border-slate-300 bg-slate-50 text-slate-700";
+  }
+};
+
 const DiscrepanciesPage: React.FC = () => {
+  const [items, setItems] = useState<DiscrepancyItem[]>([]);
+  const [stats, setStats] = useState<DiscrepancyStats>({ totalDiscrepancies: 0, totalLoss: 0 });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DiscrepancyStatus | "all">("all");
-  const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<DiscrepancySeverity | "all">("all");
-  const [isSeverityOpen, setIsSeverityOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
-  const statusDropdownRef = useRef<HTMLDivElement | null>(null);
-  const severityDropdownRef = useRef<HTMLDivElement | null>(null);
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [statsResponse, listResponse] = await Promise.all([
+        api.get("/discrepancies/stats"),
+        api.get("/discrepancies", {
+          params: {
+            page: 1,
+            limit: 200,
+            status: statusFilter === "all" ? undefined : statusFilter,
+            severity: severityFilter === "all" ? undefined : severityFilter,
+            dateFrom: dateFrom || undefined,
+            dateTo: dateTo || undefined,
+          },
+        }),
+      ]);
+
+      const rows = Array.isArray(listResponse.data?.discrepancies)
+        ? listResponse.data.discrepancies
+        : [];
+
+      const mapped: DiscrepancyItem[] = rows.map((row: any) => ({
+        id: row.id || "",
+        route_number: row.route_number || "-",
+        bus_number: row.bus_number || "-",
+        transaction_date: row.transaction_date || "",
+        expected_revenue: Number(row.expected_revenue || 0),
+        expected_daily: Number(row.expected_daily || 0),
+        expected_weekly: Number(row.expected_weekly || 0),
+        expected_monthly: Number(row.expected_monthly || 0),
+        actual_revenue: Number(row.actual_revenue || 0),
+        actual_weekly: Number(row.actual_weekly || 0),
+        actual_monthly: Number(row.actual_monthly || 0),
+        loss_amount: Number(row.loss_amount || 0),
+        anomaly_score: Number(row.anomaly_score || 0),
+        status: (row.status || "pending") as DiscrepancyStatus,
+        severity: (row.severity || "low") as DiscrepancySeverity,
+        notes: row.notes || "",
+        detection_method: row.detection_method || "timeseries_residual_v1",
+      }));
+
+      setItems(mapped);
+      setStats({
+        totalDiscrepancies: Number(statsResponse.data?.totalDiscrepancies || mapped.length),
+        totalLoss: Number(statsResponse.data?.totalLoss || 0),
+      });
+    } catch {
+      setItems([]);
+      setStats({ totalDiscrepancies: 0, totalLoss: 0 });
+      setError("Failed to load discrepancies.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateFrom, dateTo, severityFilter, statusFilter]);
+
+  const runAnalysis = useCallback(async () => {
+    setIsAnalyzing(true);
+    try {
+      await api.post("/discrepancies/analyze", null, { params: { days: 90 } });
+    } catch {
+      // continue to load whatever data is already available
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!isStatusOpen && !isSeverityOpen) {
-      return;
+    const run = async () => {
+      await runAnalysis();
+      await loadData();
+    };
+    void run();
+  }, [loadData, runAnalysis]);
+
+  const filteredItems = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    if (!term) return items;
+
+    return items.filter((item) => {
+      return (
+        item.id.toLowerCase().includes(term) ||
+        item.route_number.toLowerCase().includes(term) ||
+        item.bus_number.toLowerCase().includes(term) ||
+        item.notes.toLowerCase().includes(term)
+      );
+    });
+  }, [items, searchQuery]);
+
+  const updateStatus = async (id: string, status: DiscrepancyStatus, notes: string) => {
+    try {
+      await api.put(`/discrepancies/${id}/status`, { status, notes });
+      await loadData();
+    } catch {
+      setError("Failed to update discrepancy status.");
     }
+  };
 
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-
-      if (
-        isStatusOpen &&
-        statusDropdownRef.current &&
-        !statusDropdownRef.current.contains(target)
-      ) {
-        setIsStatusOpen(false);
-      }
-
-      if (
-        isSeverityOpen &&
-        severityDropdownRef.current &&
-        !severityDropdownRef.current.contains(target)
-      ) {
-        setIsSeverityOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isStatusOpen, isSeverityOpen]);
-
-  const totalCount = 0;
-  const shownCount = 0;
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900 mb-1">
-          Discrepancies
-        </h1>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Discrepancies</h1>
         <p className="text-sm text-slate-500">
-          Manage and track revenue discrepancies
+          ML-based anomaly detection on bus revenue (daily, weekly and monthly baselines).
         </p>
       </div>
 
-      {/* Filters + Export */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex-1 flex flex-col gap-3 md:flex-row md:items-start">
-          {/* Search */}
-          <div className="flex-1 min-w-[220px]">
-            <p className="text-[11px] font-semibold text-slate-600 mb-1">Search</p>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                <img
-                  src="/images/search.png"
-                  alt="Search"
-                  className="h-4 w-4 object-contain opacity-60"
-                />
-              </span>
-              <input
-                type="text"
-                placeholder="Search by ID, route, bus, or driver..."
-                className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Status filter (custom dropdown with rounded menu) */}
-          <div className="min-w-[160px]" ref={statusDropdownRef}>
-            <p className="text-[11px] font-semibold text-slate-600 mb-1">Status</p>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsStatusOpen((open) => !open)}
-                className="w-full inline-flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none transition-colors duration-150 ease-out focus:border-blue-500 focus:bg-blue-50/40"
-              >
-                <span>
-                  {statusOptions.find((o) => o.value === statusFilter)?.label ||
-                    "All Statuses"}
-                </span>
-                <span className="text-slate-400 flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    className="h-3.5 w-3.5"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M5 8l5 5 5-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
-
-              {isStatusOpen && (
-                <div className="absolute z-10 mt-1 left-0 right-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-                  {statusOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(option.value as DiscrepancyStatus | "all");
-                        setIsStatusOpen(false);
-                      }}
-                      className={`w-full px-3 py-1.5 text-left text-xs transition-colors duration-100 ${
-                        statusFilter === option.value
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Severity filter (custom dropdown matching status) */}
-          <div className="min-w-[160px]" ref={severityDropdownRef}>
-            <p className="text-[11px] font-semibold text-slate-600 mb-1">Severity</p>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsSeverityOpen((open) => !open)}
-                className="w-full inline-flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none transition-colors duration-150 ease-out focus:border-blue-500 focus:bg-blue-50/40"
-              >
-                <span>
-                  {severityOptions.find((o) => o.value === severityFilter)?.label ||
-                    "All Severities"}
-                </span>
-                <span className="text-slate-400 flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    className="h-3.5 w-3.5"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M5 8l5 5 5-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
-
-              {isSeverityOpen && (
-                <div className="absolute z-10 mt-1 left-0 right-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-                  {severityOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setSeverityFilter(option.value as DiscrepancySeverity | "all");
-                        setIsSeverityOpen(false);
-                      }}
-                      className={`w-full px-3 py-1.5 text-left text-xs transition-colors duration-100 ${
-                        severityFilter === option.value
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs text-slate-500">Total Discrepancies</p>
+          <p className="mt-1 text-2xl font-semibold text-slate-900">{stats.totalDiscrepancies}</p>
         </div>
-
-        {/* Export button */}
-        <div className="flex flex-col items-start">
-          {/* spacer to align with label row without showing a title */}
-          <div className="mb-1 h-[14px]" />
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm opacity-60 cursor-not-allowed"
-          >
-            <span className="flex items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                className="h-4 w-4"
-                aria-hidden="true"
-              >
-                <path
-                  d="M10 3v8m0 0l-3-3m3 3l3-3M4 14h12v3H4z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-            <span>Export Report</span>
-          </button>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs text-slate-500">Total Loss</p>
+          <p className="mt-1 text-2xl font-semibold text-red-600">Rs {stats.totalLoss.toFixed(2)}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs text-slate-500">System Analysis</p>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                void (async () => {
+                  await runAnalysis();
+                  await loadData();
+                })();
+              }}
+              disabled={isAnalyzing}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isAnalyzing ? "Analyzing..." : "Run Analysis"}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* List header */}
-      <p className="text-xs text-slate-500">
-        Showing {shownCount} of {totalCount} discrepancies
-      </p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by ID, route, bus"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
+          />
 
-      {/* Discrepancy list */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <div className="px-6 py-8 text-center text-sm text-slate-400">
-          No discrepancies to display yet.
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as DiscrepancyStatus | "all")}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
+          >
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value as DiscrepancySeverity | "all")}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
+          >
+            {severityOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
+          />
+
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
+          />
         </div>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-600">{error}</div>
+      )}
+
+      <div className="space-y-4">
+        {isLoading && (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-400">
+            Loading discrepancies...
+          </div>
+        )}
+
+        {!isLoading && filteredItems.length === 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-400">
+            No anomalies detected for current filters.
+          </div>
+        )}
+
+        {!isLoading &&
+          filteredItems.map((item) => {
+            const txDate = item.transaction_date ? new Date(item.transaction_date) : null;
+            const dateLabel = txDate && !Number.isNaN(txDate.getTime()) ? txDate.toISOString().slice(0, 10) : "-";
+            const displayId = item.id ? `DISC-${item.id.slice(0, 8).toUpperCase()}` : "DISC-UNKNOWN";
+
+            return (
+              <article key={item.id} className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-semibold text-slate-900">{displayId}</h2>
+                    <span className={`rounded-full border px-3 py-0.5 text-xs font-medium capitalize ${severityBadgeClass(item.severity)}`}>
+                      {item.severity}
+                    </span>
+                    <span className={`rounded-full border px-3 py-0.5 text-xs font-medium capitalize ${statusBadgeClass(item.status)}`}>
+                      {item.status}
+                    </span>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-4xl font-bold text-red-600">-Rs {item.loss_amount.toFixed(2)}</p>
+                    <p className="text-sm text-slate-500">Expected: Rs {item.expected_revenue.toFixed(2)}</p>
+                    <p className="text-sm text-slate-500">Actual: Rs {item.actual_revenue.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3 text-sm">
+                  <div>
+                    <p className="text-slate-500">Route</p>
+                    <p className="text-xl font-semibold text-slate-900">{item.route_number || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Bus Number</p>
+                    <p className="text-xl font-semibold text-slate-900">{item.bus_number || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Date</p>
+                    <p className="text-xl font-semibold text-slate-900">{dateLabel}</p>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-lg text-slate-600">
+                  {item.notes || "System detected abnormal revenue drop for this bus/date."}
+                </p>
+
+                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3 text-sm text-slate-600">
+                  <p>Daily baseline: Rs {item.expected_daily.toFixed(2)}</p>
+                  <p>Weekly baseline: Rs {item.expected_weekly.toFixed(2)}</p>
+                  <p>Monthly baseline: Rs {item.expected_monthly.toFixed(2)}</p>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-slate-500">Status:</span>
+                  <select
+                    value={item.status}
+                    onChange={(e) => {
+                      void updateStatus(item.id, e.target.value as DiscrepancyStatus, item.notes);
+                    }}
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="investigating">Investigating</option>
+                    <option value="escalated">Escalated</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                  <span className="text-xs text-slate-500">Model: {item.detection_method || "timeseries_residual_v1"}</span>
+                  <span className="text-xs text-slate-500">Score: {item.anomaly_score.toFixed(2)}</span>
+                </div>
+              </article>
+            );
+          })}
       </div>
     </div>
   );

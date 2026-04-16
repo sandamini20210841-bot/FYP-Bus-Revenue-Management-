@@ -139,6 +139,8 @@ func GetTransactions(c *fiber.Ctx) error {
 			"amount":           amount,
 			"from_stop_name":   fromStop.String,
 			"to_stop_name":     toStop.String,
+			"start_destination": fromStop.String,
+			"end_destination":   toStop.String,
 			"status":           trStatus,
 		})
 	}

@@ -423,11 +423,48 @@ func DeleteRoute(c *fiber.Ctx) error {
 
 	// TODO: Verify user is bus_owner who created this route
 
-	result, err := database.Exec(`DELETE FROM routes WHERE id = $1`, routeID)
+	tx, err := database.PostgresDB.Begin()
 	if err != nil {
-		log.Printf("failed to delete route %s: %v", routeID, err)
+		log.Printf("failed to start delete transaction for route %s: %v", routeID, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to delete route",
+		})
+	}
+	defer tx.Rollback()
+
+	// Preserve ticket/transaction history when possible by detaching route links.
+	if _, err := tx.Exec(`UPDATE tickets SET route_id = NULL WHERE route_id = $1`, routeID); err != nil {
+		log.Printf("failed to detach tickets from route %s: %v", routeID, err)
+
+		errText := strings.ToLower(err.Error())
+		isRouteIDNotNull := strings.Contains(errText, "route_id") && strings.Contains(errText, "not-null")
+		isNullViolation := strings.Contains(errText, "null value") && strings.Contains(errText, "route_id")
+
+		if isRouteIDNotNull || isNullViolation {
+			// Older schemas may keep tickets.route_id as NOT NULL. Fall back to deleting linked tickets
+			// so route deletion still succeeds and transactions remain (ticket_id becomes NULL via FK).
+			if _, deleteErr := tx.Exec(`DELETE FROM tickets WHERE route_id = $1`, routeID); deleteErr != nil {
+				log.Printf("failed to delete tickets for route %s during fallback: %v", routeID, deleteErr)
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+					"error": "Route cannot be deleted because related ticket records could not be updated",
+				})
+			}
+		} else {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error": "Route is referenced by ticket records and cannot be deleted right now",
+			})
+		}
+	}
+
+	if _, err := tx.Exec(`UPDATE discrepancies SET route_id = NULL WHERE route_id = $1`, routeID); err != nil {
+		log.Printf("failed to detach discrepancies from route %s: %v", routeID, err)
+	}
+
+	result, err := tx.Exec(`DELETE FROM routes WHERE id = $1`, routeID)
+	if err != nil {
+		log.Printf("failed to delete route %s: %v", routeID, err)
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": "Route cannot be deleted because it is still referenced by related records",
 		})
 	}
 
@@ -438,6 +475,13 @@ func DeleteRoute(c *fiber.Ctx) error {
 	if rows == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Route not found",
+		})
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("failed to commit route delete %s: %v", routeID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to finalize route deletion",
 		})
 	}
 

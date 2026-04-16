@@ -13,6 +13,8 @@ type ReportTransaction = {
   amount: number;
   from_stop_name: string;
   to_stop_name: string;
+  start_destination?: string;
+  end_destination?: string;
   status: string;
 };
 
@@ -142,8 +144,10 @@ const ReportsPage: React.FC = () => {
         bus_number: row.bus_number || "-",
         transaction_date: row.transaction_date || "",
         amount: typeof row.amount === "number" ? row.amount : Number.parseFloat(row.amount || "0"),
-        from_stop_name: row.from_stop_name || "-",
-        to_stop_name: row.to_stop_name || "-",
+        from_stop_name: row.from_stop_name || row.start_destination || "-",
+        to_stop_name: row.to_stop_name || row.end_destination || "-",
+        start_destination: row.start_destination || "",
+        end_destination: row.end_destination || "",
         status: row.status || "",
       }));
 
