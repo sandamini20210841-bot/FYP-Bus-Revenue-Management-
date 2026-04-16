@@ -22,23 +22,24 @@ const ReportsPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [busNumberFilter, setBusNumberFilter] = useState("all");
   const [routeFilter, setRouteFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState("all");
+  const [selectedDate, setSelectedDate] = useState("");
   const [isRouteOpen, setIsRouteOpen] = useState(false);
-  const [isDateOpen, setIsDateOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isCustomRangeOpen, setIsCustomRangeOpen] = useState(false);
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [customDateError, setCustomDateError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [transactions, setTransactions] = useState<ReportTransaction[]>([]);
+  const [registeredBusNumbers, setRegisteredBusNumbers] = useState<string[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
 
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const routeDropdownRef = useRef<HTMLDivElement | null>(null);
-  const dateDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const formatCsvField = (value: string | number) => {
     const text = String(value ?? "");
@@ -95,7 +96,7 @@ const ReportsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!isExportMenuOpen && !isRouteOpen && !isDateOpen) return;
+    if (!isExportMenuOpen && !isRouteOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node | null;
@@ -108,10 +109,6 @@ const ReportsPage: React.FC = () => {
       if (isRouteOpen && routeDropdownRef.current && !routeDropdownRef.current.contains(target)) {
         setIsRouteOpen(false);
       }
-
-      if (isDateOpen && dateDropdownRef.current && !dateDropdownRef.current.contains(target)) {
-        setIsDateOpen(false);
-      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -119,24 +116,26 @@ const ReportsPage: React.FC = () => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isExportMenuOpen, isRouteOpen, isDateOpen]);
+  }, [isExportMenuOpen, isRouteOpen]);
 
+  const [totalPages, setTotalPages] = useState(1);
+  const rowsPerPage = 200;
   const loadTransactions = useCallback(async () => {
     setIsLoadingTransactions(true);
     setTransactionsError(null);
     try {
-      const response = await api.get("/transactions", {
-        params: {
-          page: 1,
-          limit: 200,
-          status: "completed",
-        },
-      });
+      const params: any = { page: currentPage, limit: rowsPerPage };
+      if (selectedDate) {
+        params.dateFrom = selectedDate;
+        params.dateTo = selectedDate;
+      }
+      if (routeFilter && routeFilter !== "all") params.route = routeFilter;
+      if (busNumberFilter && busNumberFilter !== "all") params.bus = busNumberFilter;
 
+      const response = await api.get("/transactions", { params });
       const rows = Array.isArray(response.data?.transactions)
         ? response.data.transactions
         : [];
-
       const mapped: ReportTransaction[] = rows.map((row: any) => ({
         id: row.id || "",
         route_number: row.route_number || "-",
@@ -150,27 +149,43 @@ const ReportsPage: React.FC = () => {
         end_destination: row.end_destination || "",
         status: row.status || "",
       }));
-
       setTransactions(mapped);
-    } catch {
+      setTotalPages(Math.max(1, Math.ceil(Number(response.data?.pagination?.total || mapped.length) / rowsPerPage)));
+    } catch (err: any) {
+      console.error("Failed to load transactions", err);
       setTransactions([]);
-      setTransactionsError("Failed to load transactions.");
+      let errorMsg = "Failed to load transactions.";
+      if (err?.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      setTransactionsError(errorMsg);
     } finally {
       setIsLoadingTransactions(false);
+    }
+  }, [currentPage, selectedDate, routeFilter, busNumberFilter]);
+
+  const loadRegisteredBusNumbers = useCallback(async () => {
+    try {
+      const response = await api.get("/buses");
+      const rows = Array.isArray(response.data?.buses) ? response.data.buses : [];
+      const busNumbers = rows
+        .map((row: any) => String(row.bus_number || "").trim())
+        .filter((busNumber: string) => busNumber.length > 0);
+      const uniqueBusNumbers = [...new Set<string>(busNumbers)].sort((a, b) =>
+        a.localeCompare(b)
+      );
+      setRegisteredBusNumbers(uniqueBusNumbers);
+    } catch {
+      setRegisteredBusNumbers([]);
     }
   }, []);
 
   useEffect(() => {
     void loadTransactions();
-
-    const intervalId = window.setInterval(() => {
-      void loadTransactions();
-    }, 60_000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [loadTransactions]);
+    void loadRegisteredBusNumbers();
+  }, [loadTransactions, loadRegisteredBusNumbers]);
 
   const routeOptions = useMemo(() => {
     const routes = new Set<string>();
@@ -182,48 +197,52 @@ const ReportsPage: React.FC = () => {
     return Array.from(routes).sort();
   }, [transactions]);
 
+  // Filtering is now applied to the current page only
   const filteredTransactions = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
-    const now = new Date();
-
+    const pickedDate = selectedDate ? new Date(`${selectedDate}T00:00:00`) : null;
     return transactions.filter((tr) => {
+      if (busNumberFilter !== "all" && tr.bus_number !== busNumberFilter) {
+        return false;
+      }
       if (routeFilter !== "all" && tr.route_number !== routeFilter) {
         return false;
       }
-
-      const trDate = tr.transaction_date ? new Date(tr.transaction_date) : null;
-      if (trDate && !Number.isNaN(trDate.getTime())) {
-        if (dateFilter === "today") {
-          const sameDay =
-            trDate.getFullYear() === now.getFullYear() &&
-            trDate.getMonth() === now.getMonth() &&
-            trDate.getDate() === now.getDate();
-          if (!sameDay) return false;
+      if (pickedDate) {
+        const trDate = tr.transaction_date ? new Date(tr.transaction_date) : null;
+        if (!trDate || Number.isNaN(trDate.getTime())) {
+          return false;
         }
-
-        if (dateFilter === "last7") {
-          const from = new Date(now);
-          from.setDate(now.getDate() - 7);
-          if (trDate < from) return false;
-        }
-
-        if (dateFilter === "last30") {
-          const from = new Date(now);
-          from.setDate(now.getDate() - 30);
-          if (trDate < from) return false;
+        const sameDay =
+          trDate.getFullYear() === pickedDate.getFullYear() &&
+          trDate.getMonth() === pickedDate.getMonth() &&
+          trDate.getDate() === pickedDate.getDate();
+        if (!sameDay) {
+          return false;
         }
       }
-
       if (!term) return true;
-
       return (
         tr.ticket_number.toLowerCase().includes(term) ||
         tr.route_number.toLowerCase().includes(term) ||
+        tr.bus_number.toLowerCase().includes(term) ||
         tr.from_stop_name.toLowerCase().includes(term) ||
         tr.to_stop_name.toLowerCase().includes(term)
       );
     });
-  }, [transactions, searchQuery, routeFilter, dateFilter]);
+  }, [transactions, searchQuery, busNumberFilter, routeFilter, selectedDate]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, busNumberFilter, routeFilter, selectedDate]);
+
+  // No client-side pagination, just use filteredTransactions
+  const paginatedTransactions = filteredTransactions;
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const visibleTransactionCount = filteredTransactions.length;
   const visibleTransactionTotal = filteredTransactions.reduce(
@@ -330,7 +349,7 @@ const ReportsPage: React.FC = () => {
     setCustomDateError(null);
   };
 
-  const handleConfirmCustomRange = () => {
+  const handleConfirmCustomRange = async () => {
     if (isExporting) return;
 
     if (!customStartDate || !customEndDate) {
@@ -347,58 +366,53 @@ const ReportsPage: React.FC = () => {
     setIsExporting(true);
 
     try {
-      const start = new Date(`${customStartDate}T00:00:00`);
-      const end = new Date(`${customEndDate}T23:59:59`);
-      const rowsInRange = filteredTransactions.filter((tr) => {
-        const dt = tr.transaction_date ? new Date(tr.transaction_date) : null;
-        if (!dt || Number.isNaN(dt.getTime())) return false;
-        return dt >= start && dt <= end;
+      const body: any = {
+        date_from: customStartDate,
+        date_to: customEndDate,
+      };
+      if (routeFilter !== "all") body.route = routeFilter;
+      if (busNumberFilter !== "all") body.bus = busNumberFilter;
+
+      const response = await api.post(`/reports/export-transactions-csv`, body, {
+        responseType: "blob",
       });
 
-      if (rowsInRange.length === 0) {
-        dispatch(
-          addNotification({
-            id: `export-custom-empty-${Date.now()}`,
-            type: "error",
-            message: "Transaction data is not available for the selected date range.",
-            timestamp: new Date().toISOString(),
-            read: false,
-          })
-        );
-        setIsExporting(false);
-        return;
-      }
-
-      downloadTransactionsCsv(
-        `transactions-${customStartDate}-to-${customEndDate}.csv`,
-        rowsInRange
-      );
+      const blob = new Blob([response.data], { type: response.headers["content-type"] || "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const filename = `transactions-${customStartDate}-to-${customEndDate}.csv`;
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
       dispatch(
         addNotification({
           id: `export-custom-${Date.now()}`,
           type: "success",
-          message: `Exported ${rowsInRange.length} transactions in custom range`,
+          message: `Export started for ${customStartDate} to ${customEndDate}`,
           timestamp: new Date().toISOString(),
           read: false,
         })
       );
-    } catch {
+    } catch (err: any) {
+      console.error("Export custom range failed", err);
+      const backendMsg = err?.response?.data?.error || err?.message || "Failed to export custom range";
       dispatch(
         addNotification({
           id: `export-custom-error-${Date.now()}`,
           type: "error",
-          message: "Failed to export custom range",
+          message: backendMsg,
           timestamp: new Date().toISOString(),
           read: false,
         })
       );
-    }
-
-    setTimeout(() => {
+    } finally {
       setIsExporting(false);
       setIsCustomRangeOpen(false);
-    }, 500);
+    }
   };
 
   return (
@@ -440,12 +454,31 @@ const ReportsPage: React.FC = () => {
               </span>
               <input
                 type="text"
-                placeholder="Search by ticket, route, start, or end destination..."
+                placeholder="Search by ticket, route, bus number, start, or end destination..."
                 className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+          </div>
+
+          {/* Bus number filter */}
+          <div className="min-w-[180px]">
+            <p className="text-[11px] font-semibold text-slate-600 mb-1">
+              Bus Number
+            </p>
+            <select
+              value={busNumberFilter}
+              onChange={(e) => setBusNumberFilter(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All bus numbers</option>
+              {registeredBusNumbers.map((busNumber) => (
+                <option key={busNumber} value={busNumber}>
+                  {busNumber}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Route filter (custom dropdown) */}
@@ -519,102 +552,25 @@ const ReportsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Date filter (custom dropdown) */}
-          <div className="min-w-[160px]" ref={dateDropdownRef}>
+          {/* Date filter (calendar picker) */}
+          <div className="min-w-[200px]">
             <p className="text-[11px] font-semibold text-slate-600 mb-1">
               Date
             </p>
-            <div className="relative">
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
               <button
                 type="button"
-                onClick={() => setIsDateOpen((open) => !open)}
-                className="w-full inline-flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none transition-colors duration-150 ease-out focus:border-blue-500 focus:bg-blue-50/40"
+                onClick={() => setSelectedDate("")}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
               >
-                <span>
-                  {dateFilter === "all" && "All dates"}
-                  {dateFilter === "today" && "Today"}
-                  {dateFilter === "last7" && "Last 7 days"}
-                  {dateFilter === "last30" && "Last 30 days"}
-                </span>
-                <span className="text-slate-400 flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    className="h-3.5 w-3.5"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M5 8l5 5 5-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
+                All
               </button>
-
-              {isDateOpen && (
-                <div className="absolute z-10 mt-1 left-0 right-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilter("all");
-                      setIsDateOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs transition-colors duration-100 ${
-                      dateFilter === "all"
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    All dates
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilter("today");
-                      setIsDateOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs transition-colors duration-100 ${
-                      dateFilter === "today"
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    Today
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilter("last7");
-                      setIsDateOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs transition-colors duration-100 ${
-                      dateFilter === "last7"
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    Last 7 days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilter("last30");
-                      setIsDateOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs transition-colors duration-100 ${
-                      dateFilter === "last30"
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    Last 30 days
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -713,7 +669,7 @@ const ReportsPage: React.FC = () => {
                 </tr>
               )}
 
-              {!isLoadingTransactions && !transactionsError && filteredTransactions.map((tr) => {
+              {!isLoadingTransactions && !transactionsError && paginatedTransactions.map((tr) => {
                 const dt = tr.transaction_date ? new Date(tr.transaction_date) : null;
                 const dateLabel = dt && !Number.isNaN(dt.getTime())
                   ? dt.toLocaleDateString()
@@ -754,6 +710,29 @@ const ReportsPage: React.FC = () => {
             </tfoot>
           </table>
         </div>
+        {!isLoadingTransactions && !transactionsError && filteredTransactions.length > 0 && (
+          <div className="px-6 pb-4 flex items-center justify-end gap-2 text-xs text-slate-600">
+            <span className="mr-2">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage === totalPages}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next page
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Custom range modal */}

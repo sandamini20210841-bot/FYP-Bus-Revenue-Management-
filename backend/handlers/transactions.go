@@ -32,6 +32,8 @@ func GetTransactions(c *fiber.Ctx) error {
 	dateFrom := strings.TrimSpace(c.Query("dateFrom"))
 	dateTo := strings.TrimSpace(c.Query("dateTo"))
 	status := strings.TrimSpace(c.Query("status"))
+	busNumber := strings.TrimSpace(c.Query("bus"))
+	routeNumber := strings.TrimSpace(c.Query("route"))
 	offset := (page - 1) * limit
 
 	baseFrom := `
@@ -64,6 +66,16 @@ func GetTransactions(c *fiber.Ctx) error {
 	if status != "" {
 		whereParts = append(whereParts, "LOWER(tr.status) = LOWER($"+itoa(argPos)+")")
 		args = append(args, status)
+		argPos++
+	}
+	if busNumber != "" {
+		whereParts = append(whereParts, "t.bus_number = $"+itoa(argPos))
+		args = append(args, busNumber)
+		argPos++
+	}
+	if routeNumber != "" {
+		whereParts = append(whereParts, "r.route_number = $"+itoa(argPos))
+		args = append(args, routeNumber)
 		argPos++
 	}
 	if role == "bus_owner" && actorUserID != "" && actorUserID != "<nil>" {

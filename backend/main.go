@@ -151,6 +151,7 @@ func main() {
 	reports.Post("/all-time", handlers.GenerateAllTimeReport)
 	reports.Post("/ticket-sales", handlers.GenerateTicketSalesReport)
 	reports.Post("/:reportId/export", handlers.ExportReport)
+	reports.Post("/export-transactions-csv", handlers.ExportTransactionsCSV)
 
 	// Audit logs
 	audit := protected.Group("/audit")
