@@ -519,6 +519,26 @@ const RoutesPage: React.FC = () => {
     }
 
     const hasValidSection = sections.some((section) => section.name.trim() !== "");
+
+    const flattenedStops = sections.flatMap((section) =>
+      section.stops
+        .filter((s) => s.name.trim().length > 0)
+        .map((s) => {
+          const sectionName = section.name.trim();
+          const stopName = s.name.trim();
+          const composedName =
+            !sectionName || sectionName === stopName
+              ? stopName
+              : `${sectionName} - ${stopName}`;
+
+          return {
+            name: composedName,
+            distance: s.distance.trim(),
+            amount: s.amount.trim(),
+          };
+        })
+    );
+
     const hasValidStop = sections.some((section) =>
       section.stops.some(
         (stop) =>
@@ -543,6 +563,22 @@ const RoutesPage: React.FC = () => {
       isValid = false;
     } else {
       setStopsError(null);
+
+      const stopAmounts = flattenedStops
+        .map((stop) => Number.parseFloat(stop.amount))
+        .filter((value) => Number.isFinite(value) && value > 0);
+
+      const hasDescendingFareStage = stopAmounts.some(
+        (value, index) => index > 0 && value < stopAmounts[index - 1]
+      );
+
+      if (hasDescendingFareStage) {
+        setStopsError(
+          "Fare amounts must follow ascending stage order (e.g., 30, 39, 50, 62...)."
+        );
+        missingMessages.push("Fare amounts are not in ascending stage order");
+        isValid = false;
+      }
     }
 
     if (!isValid) {
@@ -559,25 +595,6 @@ const RoutesPage: React.FC = () => {
       });
       return;
     }
-
-    const flattenedStops = sections.flatMap((section) =>
-      section.stops
-        .filter((s) => s.name.trim().length > 0)
-        .map((s) => {
-          const sectionName = section.name.trim();
-          const stopName = s.name.trim();
-          const composedName =
-            !sectionName || sectionName === stopName
-              ? stopName
-              : `${sectionName} - ${stopName}`;
-
-          return {
-            name: composedName,
-            distance: s.distance.trim(),
-            amount: s.amount.trim(),
-          };
-        })
-    );
 
     // Persist to backend and update local list
     const payload = {

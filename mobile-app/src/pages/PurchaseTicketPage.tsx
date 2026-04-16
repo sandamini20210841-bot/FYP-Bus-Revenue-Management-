@@ -13,6 +13,7 @@ type LocationState =
 
 type StopDetail = {
   name: string;
+  displayName: string;
   amount: number | null;
 };
 
@@ -58,6 +59,29 @@ const PurchaseTicketPage = () => {
   const dateInputRef = useRef<HTMLInputElement | null>(null);
 
   const todayIso = new Date().toISOString().slice(0, 10);
+
+  const getStopDisplayName = (rawName: string): string => {
+    const value = rawName.trim();
+    if (!value) return "";
+
+    const slashParts = value
+      .split("/")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (slashParts.length > 1) {
+      return slashParts[slashParts.length - 1];
+    }
+
+    const dashParts = value
+      .split(" - ")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (dashParts.length > 1) {
+      return dashParts[dashParts.length - 1];
+    }
+
+    return value;
+  };
 
   const isPastDate = (dateText: string): boolean => {
     if (!dateText) return false;
@@ -141,9 +165,10 @@ const PurchaseTicketPage = () => {
 
           (route.stops || []).forEach((stop: any) => {
             if (stop?.name && typeof stop.name === "string") {
-              names.add(stop.name);
+              const displayName = getStopDisplayName(stop.name);
+              names.add(displayName);
               if (routeNum) {
-                routeStopsMap[routeNum].add(stop.name);
+                routeStopsMap[routeNum].add(displayName);
 
                 const rawAmount = stop.amount;
                 let parsedAmount: number | null = null;
@@ -156,6 +181,7 @@ const PurchaseTicketPage = () => {
 
                 routeStopsDetailMap[routeNum].push({
                   name: stop.name,
+                  displayName,
                   amount: parsedAmount,
                 });
               }
@@ -165,7 +191,8 @@ const PurchaseTicketPage = () => {
 
         const stopsByRouteObj: Record<string, string[]> = {};
         Object.keys(routeStopsMap).forEach((key) => {
-          stopsByRouteObj[key] = Array.from(routeStopsMap[key]).sort();
+          // Preserve insertion order from backend (stops are returned by sequence_order ASC).
+          stopsByRouteObj[key] = Array.from(routeStopsMap[key]);
         });
 
         const stopsDetailsByRouteObj: Record<string, StopDetail[]> = {};
@@ -177,7 +204,7 @@ const PurchaseTicketPage = () => {
         setStopsByRoute(stopsByRouteObj);
         setStopsDetailsByRoute(stopsDetailsByRouteObj);
         setAllBusNumbers(Array.from(busNumbers).sort());
-        setAllStops(Array.from(names).sort());
+        setAllStops(Array.from(names));
       } catch (err) {
         // If this fails, user can still type locations manually
         console.error("Failed to load stops", err);
@@ -242,16 +269,53 @@ const PurchaseTicketPage = () => {
       return;
     }
 
-    const fromStop = details.find((s) => s.name === fromValue);
-    const toStop = details.find((s) => s.name === toValue);
+    const fromStop = details.find((s) => s.displayName === fromValue);
+    const toStop = details.find((s) => s.displayName === toValue);
 
     if (!fromStop || !toStop || fromStop.amount == null || toStop.amount == null) {
       setAmountValue("");
       return;
     }
 
-    // Assume stop amounts are cumulative from the start; fare is the difference
-    const fare = Math.abs(toStop.amount - fromStop.amount);
+    // Stage-based fare: use route fare stages and charge by travelled section distance.
+    // Example stages: 30, 39, 50, 62...; moving 3 stages charges stage[3] => 62.
+    const fareStages = Array.from(
+      new Set(
+        details
+          .map((s) => s.amount)
+          .filter((value): value is number => value != null && value > 0)
+          .map((value) => Number(value.toFixed(2)))
+      )
+    ).sort((a, b) => a - b);
+
+    const findStageIndex = (amount: number) => {
+      const normalized = Number(amount.toFixed(2));
+      const exact = fareStages.findIndex((stage) => stage === normalized);
+      if (exact >= 0) return exact;
+
+      // Fallback: choose closest stage if floating-point values are slightly off.
+      let bestIndex = 0;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      fareStages.forEach((stage, index) => {
+        const distance = Math.abs(stage - normalized);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
+      });
+      return bestIndex;
+    };
+
+    if (!fareStages.length) {
+      setAmountValue("");
+      return;
+    }
+
+    const fromStageIndex = findStageIndex(fromStop.amount);
+    const toStageIndex = findStageIndex(toStop.amount);
+    const travelledStages = Math.abs(toStageIndex - fromStageIndex);
+    const fare = fareStages[Math.min(travelledStages, fareStages.length - 1)];
+
     setAmountValue(fare > 0 ? fare.toFixed(2) : "0.00");
   }, [busNumber, fromValue, toValue, stopsDetailsByRoute]);
 
@@ -391,6 +455,12 @@ const PurchaseTicketPage = () => {
     const to = toValue.trim();
     const amount = Number.parseFloat(amountValue);
 
+    const routeStops = stopsDetailsByRoute[route] || [];
+    const resolvedFromStop = routeStops.find((s) => s.displayName === from);
+    const resolvedToStop = routeStops.find((s) => s.displayName === to);
+    const fromStopForApi = resolvedFromStop?.name || from;
+    const toStopForApi = resolvedToStop?.name || to;
+
     if (!route || !selectedDepartureTime || !allocatedBusNumber || !from || !to || Number.isNaN(amount)) {
       dispatch(
         addNotification({
@@ -435,8 +505,8 @@ const PurchaseTicketPage = () => {
         bus_number: allocatedBusNumber,
         departure_date: selectedDepartureDate,
         departure_time: selectedDepartureTime,
-        from_stop_name: from,
-        to_stop_name: to,
+        from_stop_name: fromStopForApi,
+        to_stop_name: toStopForApi,
         amount: amount.toFixed(2),
         passenger_count: 1,
         payment_method: "cash",

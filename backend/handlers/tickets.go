@@ -176,7 +176,62 @@ func PurchaseTicket(c *fiber.Ctx) error {
 
 	ticketAmount := 0.0
 	if fromStop.amount.Valid && toStop.amount.Valid {
-		ticketAmount = math.Abs(toStop.amount.Float64-fromStop.amount.Float64) * float64(req.PassengerCount)
+		perPassengerFare := math.Abs(toStop.amount.Float64 - fromStop.amount.Float64)
+
+		stageRows, stageErr := database.Query(
+			`SELECT DISTINCT amount
+			 FROM stops
+			 WHERE route_id = $1 AND amount IS NOT NULL AND amount > 0
+			 ORDER BY amount ASC`,
+			routeID,
+		)
+		if stageErr == nil {
+			defer stageRows.Close()
+
+			fareStages := make([]float64, 0, 16)
+			for stageRows.Next() {
+				var stage sql.NullFloat64
+				if err := stageRows.Scan(&stage); err == nil && stage.Valid {
+					fareStages = append(fareStages, stage.Float64)
+				}
+			}
+
+			if len(fareStages) > 0 {
+				findStageIndex := func(value float64) int {
+					exactIdx := -1
+					for i, stage := range fareStages {
+						if math.Abs(stage-value) < 0.0001 {
+							exactIdx = i
+							break
+						}
+					}
+					if exactIdx >= 0 {
+						return exactIdx
+					}
+
+					bestIdx := 0
+					bestDist := math.Inf(1)
+					for i, stage := range fareStages {
+						d := math.Abs(stage - value)
+						if d < bestDist {
+							bestDist = d
+							bestIdx = i
+						}
+					}
+					return bestIdx
+				}
+
+				fromStageIdx := findStageIndex(fromStop.amount.Float64)
+				toStageIdx := findStageIndex(toStop.amount.Float64)
+				travelledStages := int(math.Abs(float64(toStageIdx - fromStageIdx)))
+				if travelledStages >= len(fareStages) {
+					travelledStages = len(fareStages) - 1
+				}
+				perPassengerFare = fareStages[travelledStages]
+			}
+		}
+
+		ticketAmount = perPassengerFare * float64(req.PassengerCount)
 	}
 	if ticketAmount <= 0 && strings.TrimSpace(req.Amount) != "" {
 		parsed, parseErr := strconv.ParseFloat(strings.TrimSpace(req.Amount), 64)
