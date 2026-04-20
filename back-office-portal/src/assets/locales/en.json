@@ -18,6 +18,13 @@
     "edit": "Edit",
     "delete": "Delete",
     "export": "Export"
+    ,
+    "buses": "Buses",
+    "summary": "Summary",
+    "timetable": "Timetable",
+    "users": "Users",
+    "profile": "Profile",
+    "manageBuses": "Manage buses assigned to routes."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -25,7 +32,17 @@
     "totalTransactions": "Total Transactions",
     "revenueLoss": "Revenue Loss",
     "totalDiscrepancies": "Total Discrepancies",
-    "recentAlerts": "Recent Alerts"
+    "recentAlerts": "Recent Alerts",
+    "recentDiscrepancies": "Recent Discrepancies",
+    "noRecent": "No recent discrepancies to display."
+  },
+  "actions": {
+    "viewAll": "View All"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "forgotPassword": "Forgot password"
   },
   "discrepancies": {
     "title": "Discrepancy Records",
@@ -44,6 +61,31 @@
   },
   "reports": {
     "title": "Reports",
+    "description": "Download detailed transaction data for analysis.",
+    "filterTransactions": "Filter Transactions",
+    "search": "Search",
+    "searchPlaceholder": "Search by ticket, route, bus number, start, or end destination...",
+    "busNumber": "Bus Number",
+    "allBusNumbers": "All bus numbers",
+    "route": "Route",
+    "allRoutes": "All routes",
+    "exportAll": "Export all transactions",
+    "exportToday": "Today transactions",
+    "exportCustomRange": "Custom range",
+    "transactionDetails": "Transaction Details",
+    "noData": "Transaction data will appear here once tickets are purchased.",
+    "totalLabel": "Total:",
+    "transactions": "transactions",
+    "headers": {
+      "route": "Route",
+      "ticket": "Ticket Number",
+      "bus": "Bus Number",
+      "date": "Date",
+      "time": "Time",
+      "amount": "Amount",
+      "start": "Start Destination",
+      "end": "End Destination"
+    },
     "generateReport": "Generate Report",
     "daily": "Daily",
     "allTime": "All-Time",

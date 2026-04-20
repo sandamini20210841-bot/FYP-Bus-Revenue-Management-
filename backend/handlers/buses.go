@@ -339,6 +339,17 @@ func GetRouteDepartures(c *fiber.Ctx) error {
 	setupErr := database.QueryRow(`SELECT total_turns FROM timetable_setups WHERE route_id = $1`, routeID).Scan(&totalTurns)
 
 	departures := []fiber.Map{}
+	if setupErr == sql.ErrNoRows {
+		// No timetable configured for this route: return empty departures so
+		// clients can show an explicit "no timetable" state instead of
+		// rendering a default/sample schedule.
+		return c.JSON(fiber.Map{"departures": departures, "total_turns": 0, "has_setup": false})
+	}
+	if setupErr != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to load timetable setup"})
+	}
+
+	// setupErr == nil -> proceed to load entries
 	if setupErr == nil {
 		entriesQuery := `SELECT e.turn_number, e.bus_number, COALESCE(e.departure_time, '')
 			FROM timetable_entries e
@@ -388,24 +399,8 @@ func GetRouteDepartures(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"departures": departures, "total_turns": totalTurns})
 	}
 
-	times := []string{"05:30", "06:15", "07:00", "07:45", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00", "17:30", "19:00"}
-	for idx, departureTime := range times {
-		selected := busItem{busNumber: "-", ownerName: ""}
-		if len(buses) > 0 {
-			selected = buses[idx%len(buses)]
-		}
-		departures = append(departures, fiber.Map{
-			"route_id": routeID,
-			"route_number": routeNumber,
-			"date": depDate.Format("2006-01-02"),
-			"turn_number": idx + 1,
-			"departure_time": departureTime,
-			"bus_number": selected.busNumber,
-			"bus_owner": selected.ownerName,
-		})
-	}
-
-	return c.JSON(fiber.Map{"departures": departures})
+	// No fallback/sample schedule when no timetable setup exists.
+	return c.JSON(fiber.Map{"departures": departures, "total_turns": totalTurns, "has_setup": true})
 }
 
 func UpsertTimetableSetup(c *fiber.Ctx) error {

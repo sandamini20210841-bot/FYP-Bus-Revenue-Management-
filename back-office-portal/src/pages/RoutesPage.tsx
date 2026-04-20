@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../store";
 import { addNotification } from "../store/slices/alertsSlice";
@@ -115,6 +116,7 @@ const createEmptySection = (id: number): RouteSectionForm => ({
 });
 
 const RoutesPage: React.FC = () => {
+  const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const { canCreate, canEdit, canDelete } = useAccessPermissions();
   const canCreateRoutes = canCreate("routes");
@@ -774,10 +776,8 @@ const RoutesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Routes</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Manage bus routes and their configurations.
-        </p>
+        <h1 className="text-2xl font-semibold text-slate-900">{t("routes.title")}</h1>
+        <p className="text-sm text-slate-500 mt-1">{t("common.routes")}</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">

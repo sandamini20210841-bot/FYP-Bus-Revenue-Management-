@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 // modal will be implemented inline
 import api from "../utils/axios";
 
@@ -73,6 +74,7 @@ const statusBadgeClass = (status: DiscrepancyStatus) => {
 };
 
 const DiscrepanciesPage: React.FC = () => {
+  const { t } = useTranslation();
   const [items, setItems] = useState<DiscrepancyItem[]>([]);
   const [stats, setStats] = useState<DiscrepancyStats>({ totalDiscrepancies: 0, totalLoss: 0 });
   const [isLoading, setIsLoading] = useState(false);
@@ -278,30 +280,28 @@ const DiscrepanciesPage: React.FC = () => {
   return (
     <div className="space-y-6 text-sm">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Discrepancies</h1>
-        <p className="text-sm text-slate-500">
-          ML-based anomaly detection on bus revenue (daily, weekly and monthly baselines).
-        </p>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">{t("discrepancies.title")}</h1>
+        <p className="text-sm text-slate-500">{t("discrepancies.title")}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">Total Discrepancies</p>
+          <p className="text-xs text-slate-500">{t("dashboard.totalDiscrepancies")}</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{stats.totalDiscrepancies}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">Total Loss</p>
+          <p className="text-xs text-slate-500">{t("dashboard.revenueLoss")}</p>
           <p className="mt-1 text-2xl font-semibold text-red-600">Rs {stats.totalLoss.toFixed(2)}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">Export</p>
+          <p className="text-xs text-slate-500">{t("common.export")}</p>
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
               onClick={() => exportReport()}
               className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
             >
-              Export report
+              {t("reports.exportCSV")}
             </button>
           </div>
         </div>

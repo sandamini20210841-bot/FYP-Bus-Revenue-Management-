@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/axios";
 import MobileShell from "../layout/MobileShell";
+import { useTranslation } from "react-i18next";
 import { useAppDispatch } from "../hooks/useAppHooks";
 import { addNotification } from "../store/slices/uiSlice";
 
@@ -52,6 +53,7 @@ const PurchaseTicketPage = () => {
   const [locationState, setLocationState] = useState<LocationState>({
     status: "idle",
   });
+  const { t } = useTranslation();
 
   const busDropdownRef = useRef<HTMLDivElement | null>(null);
   const fromDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -411,7 +413,7 @@ const PurchaseTicketPage = () => {
       () => {
         setLocationState({
           status: "error",
-          message: "Unable to fetch current location.",
+          message: t("purchase.locationError"),
         });
       },
       {
@@ -465,7 +467,7 @@ const PurchaseTicketPage = () => {
       dispatch(
         addNotification({
           id: `ticket-invalid-${Date.now()}`,
-          message: "Select route, time, bus number, stops, and amount",
+          message: t("purchase.errorIncomplete"),
           type: "error",
         })
       );
@@ -476,7 +478,7 @@ const PurchaseTicketPage = () => {
       dispatch(
         addNotification({
           id: `ticket-past-date-${Date.now()}`,
-          message: "Past dates are not allowed",
+          message: t("purchase.errorPastDate"),
           type: "error",
         })
       );
@@ -490,7 +492,7 @@ const PurchaseTicketPage = () => {
       dispatch(
         addNotification({
           id: `ticket-past-time-${Date.now()}`,
-          message: "Selected departure time has already passed",
+          message: t("purchase.errorPastTime"),
           type: "error",
         })
       );
@@ -515,7 +517,7 @@ const PurchaseTicketPage = () => {
       dispatch(
         addNotification({
           id: `ticket-success-${Date.now()}`,
-          message: "Ticket purchased",
+          message: t("purchase.success"),
           type: "success",
         })
       );
@@ -529,7 +531,7 @@ const PurchaseTicketPage = () => {
       dispatch(
         addNotification({
           id: `ticket-failed-${Date.now()}`,
-          message: "Purchase failed",
+          message: t("purchase.failed"),
           type: "error",
         })
       );
@@ -539,19 +541,14 @@ const PurchaseTicketPage = () => {
   };
 
   return (
-    <MobileShell
-      title="Purchase ticket"
-      subtitle="Choose your trip and confirm your destination."
-    >
+    <MobileShell title={t("purchase.title")} subtitle={t("purchase.subtitle")}>
       <main className="flex-1">
         <form
           onSubmit={handleSubmit}
           className="mt-4 space-y-4 max-w-md mx-auto"
         >
           <div className="space-y-1.5" ref={busDropdownRef}>
-            <label className="block text-xs font-medium text-slate-200">
-              Route
-            </label>
+            <label className="block text-xs font-medium text-slate-200">{t("purchase.route")}</label>
             <div className="relative">
               <input
                 type="text"
@@ -565,7 +562,7 @@ const PurchaseTicketPage = () => {
                   setTimeout(() => setShowBusDropdown(false), 120);
                 }}
                 className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 pr-7 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
-                placeholder="Type route (e.g. 138)"
+                placeholder={t("purchase.routePlaceholder")}
               />
               <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-400">
                 ▾
@@ -596,9 +593,7 @@ const PurchaseTicketPage = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-200">
-              Date
-            </label>
+            <label className="block text-xs font-medium text-slate-200">{t("purchase.date")}</label>
             <input
               ref={dateInputRef}
               type="date"
@@ -619,9 +614,7 @@ const PurchaseTicketPage = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-200">
-              Time
-            </label>
+            <label className="block text-xs font-medium text-slate-200">{t("purchase.time")}</label>
             <select
               value={selectedDepartureTime}
               onChange={(e) => {
@@ -632,7 +625,7 @@ const PurchaseTicketPage = () => {
               }}
               className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
             >
-              <option value="">Select time</option>
+              <option value="">{t("purchase.selectTime")}</option>
               {routeDepartures.map((item) => (
                 <option key={`${item.date}-${item.departure_time}`} value={item.departure_time}>
                   {item.departure_time}
@@ -642,22 +635,18 @@ const PurchaseTicketPage = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-200">
-              Bus number
-            </label>
+            <label className="block text-xs font-medium text-slate-200">{t("purchase.busNumber")}</label>
             <input
               type="text"
               value={allocatedBusNumber}
               readOnly
               className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 focus:border-slate-700"
-              placeholder="Auto-selected by time"
+              placeholder={t("purchase.autoSelected")}
             />
           </div>
 
           <div className="space-y-1.5" ref={fromDropdownRef}>
-            <label className="block text-xs font-medium text-slate-200">
-              From (your location)
-            </label>
+            <label className="block text-xs font-medium text-slate-200">{t("purchase.from")}</label>
             <div className="relative">
               <input
                 type="text"
@@ -676,7 +665,7 @@ const PurchaseTicketPage = () => {
                   setTimeout(() => setShowFromDropdown(false), 120);
                 }}
                 className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 pr-7 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
-                placeholder="Detecting current location..."
+                placeholder={t("purchase.detectingLocation")}
               />
               <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-400">
                 ▾
@@ -702,22 +691,15 @@ const PurchaseTicketPage = () => {
               )}
             </div>
             {locationState.status === "loading" && (
-              <p className="text-[11px] text-slate-500">
-                Getting your current location...
-              </p>
+              <p className="text-[11px] text-slate-500">{t("purchase.gettingLocation")}</p>
             )}
             {locationState.status === "error" && (
-              <p className="text-[11px] text-red-300">
-                {locationState.message} You can also enter a starting point
-                manually.
-              </p>
+              <p className="text-[11px] text-red-300">{locationState.message} {t("purchase.enterManually")}</p>
             )}
           </div>
 
           <div className="space-y-1.5" ref={toDropdownRef}>
-            <label className="block text-xs font-medium text-slate-200">
-              To (destination)
-            </label>
+            <label className="block text-xs font-medium text-slate-200">{t("purchase.to")}</label>
             <div className="relative">
               <input
                 type="text"
@@ -737,7 +719,7 @@ const PurchaseTicketPage = () => {
                 }}
                 required
                 className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 pr-7 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
-                placeholder="Enter destination"
+                placeholder={t("purchase.enterDestination")}
               />
               <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-400">
                 ▾
@@ -765,20 +747,15 @@ const PurchaseTicketPage = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-200">
-              Amount
-            </label>
+            <label className="block text-xs font-medium text-slate-200">{t("purchase.amount")}</label>
             <input
               type="text"
               value={amountValue}
               readOnly
               className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 focus:border-slate-700"
-              placeholder="Auto-calculated amount"
+              placeholder={t("purchase.amountAuto")}
             />
-            <p className="text-[11px] text-slate-500">
-              Amount is calculated automatically based on the selected route and
-              stops.
-            </p>
+            <p className="text-[11px] text-slate-500">{t("purchase.amountInfo")}</p>
           </div>
 
           <button
@@ -786,7 +763,7 @@ const PurchaseTicketPage = () => {
             disabled={isSubmitting}
             className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-white bg-white px-4 py-2.5 text-xs font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70 focus:ring-offset-0 disabled:opacity-60"
           >
-            {isSubmitting ? "PROCESSING..." : "BUY TICKET"}
+            {isSubmitting ? t("purchase.processing") : t("purchase.buyTicket")}
           </button>
         </form>
 
@@ -808,7 +785,7 @@ const PurchaseTicketPage = () => {
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
               </div>
-              <p className="text-sm font-semibold text-white">Purchase complete</p>
+              <p className="text-sm font-semibold text-white">{t("purchase.complete")}</p>
               <button
                 type="button"
                 onClick={() => {
@@ -817,7 +794,7 @@ const PurchaseTicketPage = () => {
                 }}
                 className="mt-3 inline-flex items-center justify-center text-xs font-medium text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
               >
-                Show History
+                {t("purchase.showHistory")}
               </button>
             </div>
           </div>

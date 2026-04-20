@@ -20,6 +20,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import SummaryPage from "./pages/SummaryPage";
 import TimetablePage from "./pages/TimetablePage";
 import UsersPage from "./pages/UsersPage";
+import SettingsPage from "./pages/SettingsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import BusesPage from "./pages/BusesPage";
 import { type ModuleName, useAccessPermissions } from "./hooks/useAccessPermissions";
@@ -221,7 +222,7 @@ function App() {
             element={
               <RequireAuth>
                 <MainLayout>
-                  <div>Settings Page</div>
+                  <SettingsPage />
                 </MainLayout>
               </RequireAuth>
             }

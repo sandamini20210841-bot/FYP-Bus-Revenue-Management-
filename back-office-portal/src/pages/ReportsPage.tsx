@@ -3,6 +3,7 @@ import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../store";
 import { addNotification } from "../store/slices/alertsSlice";
 import api from "../utils/axios";
+import { useTranslation } from "react-i18next";
 
 type ReportTransaction = {
   id: string;
@@ -20,6 +21,7 @@ type ReportTransaction = {
 
 const ReportsPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const { t } = useTranslation();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [busNumberFilter, setBusNumberFilter] = useState("all");
@@ -419,25 +421,17 @@ const ReportsPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900 mb-1">
-          Transaction Reports
-        </h1>
-        <p className="text-sm text-slate-500">
-          Download detailed transaction data for analysis.
-        </p>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">{t("reports.title")}</h1>
+        <p className="text-sm text-slate-500">{t("reports.description")}</p>
       </div>
 
       {/* Filter section */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Filter Transactions
-        </h2>
+        <h2 className="text-sm font-semibold text-slate-900">{t("reports.filterTransactions")}</h2>
         <div className="flex flex-col gap-3 md:flex-row md:items-start">
           {/* Search */}
           <div className="flex-1 min-w-[220px]">
-            <p className="text-[11px] font-semibold text-slate-600 mb-1">
-              Search
-            </p>
+            <p className="text-[11px] font-semibold text-slate-600 mb-1">{t("reports.search")}</p>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
                 <svg
@@ -454,7 +448,7 @@ const ReportsPage: React.FC = () => {
               </span>
               <input
                 type="text"
-                placeholder="Search by ticket, route, bus number, start, or end destination..."
+                placeholder={t("reports.searchPlaceholder")}
                 className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -464,15 +458,13 @@ const ReportsPage: React.FC = () => {
 
           {/* Bus number filter */}
           <div className="min-w-[180px]">
-            <p className="text-[11px] font-semibold text-slate-600 mb-1">
-              Bus Number
-            </p>
+            <p className="text-[11px] font-semibold text-slate-600 mb-1">{t("reports.busNumber")}</p>
             <select
               value={busNumberFilter}
               onChange={(e) => setBusNumberFilter(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="all">All bus numbers</option>
+              <option value="all">{t("reports.allBusNumbers")}</option>
               {registeredBusNumbers.map((busNumber) => (
                 <option key={busNumber} value={busNumber}>
                   {busNumber}
@@ -483,18 +475,14 @@ const ReportsPage: React.FC = () => {
 
           {/* Route filter (custom dropdown) */}
           <div className="min-w-[160px]" ref={routeDropdownRef}>
-            <p className="text-[11px] font-semibold text-slate-600 mb-1">
-              Route
-            </p>
+            <p className="text-[11px] font-semibold text-slate-600 mb-1">{t("reports.route")}</p>
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setIsRouteOpen((open) => !open)}
                 className="w-full inline-flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none transition-colors duration-150 ease-out focus:border-blue-500 focus:bg-blue-50/40"
               >
-                <span>
-                  {routeFilter === "all" ? "All routes" : routeFilter}
-                </span>
+                <span>{routeFilter === "all" ? t("reports.allRoutes") : routeFilter}</span>
                 <span className="text-slate-400 flex items-center">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -579,9 +567,7 @@ const ReportsPage: React.FC = () => {
       {/* Transactions table layout (no data yet) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Transaction Details
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-900">{t("reports.transactionDetails")}</h2>
           {/* Export button + menu (aligned with table header) */}
           <div className="relative" ref={exportMenuRef}>
             <button
@@ -595,29 +581,11 @@ const ReportsPage: React.FC = () => {
             </button>
 
             {isExportMenuOpen && (
-              <div className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg text-xs text-slate-700 z-10">
-                <button
-                  type="button"
-                  onClick={handleExportAll}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50"
-                >
-                  Export all transactions
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportToday}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50"
-                >
-                  Today transactions
-                </button>
-                <button
-                  type="button"
-                  onClick={openCustomRange}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 border-t border-slate-100"
-                >
-                  Custom range
-                </button>
-              </div>
+                <div className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg text-xs text-slate-700 z-10">
+                  <button type="button" onClick={handleExportAll} className="w-full text-left px-3 py-2 hover:bg-slate-50">{t("reports.exportAll")}</button>
+                  <button type="button" onClick={handleExportToday} className="w-full text-left px-3 py-2 hover:bg-slate-50">{t("reports.exportToday")}</button>
+                  <button type="button" onClick={openCustomRange} className="w-full text-left px-3 py-2 hover:bg-slate-50 border-t border-slate-100">{t("reports.exportCustomRange")}</button>
+                </div>
             )}
           </div>
         </div>
@@ -625,14 +593,14 @@ const ReportsPage: React.FC = () => {
           <table className="min-w-full text-left text-xs text-slate-700">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
-                <th className="py-2 pr-4 font-semibold">Route</th>
-                <th className="py-2 pr-4 font-semibold">Ticket Number</th>
-                <th className="py-2 pr-4 font-semibold">Bus Number</th>
-                <th className="py-2 pr-4 font-semibold">Date</th>
-                <th className="py-2 pr-4 font-semibold">Time</th>
-                <th className="py-2 pr-4 font-semibold">Amount</th>
-                <th className="py-2 pr-4 font-semibold">Start Destination</th>
-                <th className="py-2 pr-0 font-semibold">End Destination</th>
+                <th className="py-2 pr-4 font-semibold">{t("reports.headers.route")}</th>
+                <th className="py-2 pr-4 font-semibold">{t("reports.headers.ticket")}</th>
+                <th className="py-2 pr-4 font-semibold">{t("reports.headers.bus")}</th>
+                <th className="py-2 pr-4 font-semibold">{t("reports.headers.date")}</th>
+                <th className="py-2 pr-4 font-semibold">{t("reports.headers.time")}</th>
+                <th className="py-2 pr-4 font-semibold">{t("reports.headers.amount")}</th>
+                <th className="py-2 pr-4 font-semibold">{t("reports.headers.start")}</th>
+                <th className="py-2 pr-0 font-semibold">{t("reports.headers.end")}</th>
               </tr>
             </thead>
             <tbody>
@@ -660,12 +628,7 @@ const ReportsPage: React.FC = () => {
 
               {!isLoadingTransactions && !transactionsError && filteredTransactions.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={8}
-                    className="py-6 text-center text-[11px] text-slate-400"
-                  >
-                    Transaction data will appear here once tickets are purchased.
-                  </td>
+                    <td colSpan={8} className="py-6 text-center text-[11px] text-slate-400">{t("reports.noData")}</td>
                 </tr>
               )}
 
@@ -698,13 +661,13 @@ const ReportsPage: React.FC = () => {
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-4" />
-                <td className="py-3 pr-4 font-semibold text-slate-700">Total:</td>
+                <td className="py-3 pr-4 font-semibold text-slate-700">{t("reports.totalLabel")}</td>
                 <td className="py-3 pr-4 font-bold text-emerald-600">
                   Rs. {visibleTransactionTotal.toFixed(2)}
                 </td>
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-0 text-slate-500">
-                  {visibleTransactionCount} transactions
+                  {visibleTransactionCount} {t("reports.transactions")}
                 </td>
               </tr>
             </tfoot>

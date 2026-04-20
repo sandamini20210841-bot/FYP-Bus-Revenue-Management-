@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import MobileShell from "../layout/MobileShell";
+import { useTranslation } from "react-i18next";
 import api from "../utils/axios";
 
 type HistoryTicket = {
@@ -24,6 +25,7 @@ const normalizeDisplayValue = (value: unknown): string | null => {
 };
 
 const HistoryPage = () => {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [tickets, setTickets] = useState<HistoryTicket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<HistoryTicket | null>(null);
@@ -115,16 +117,16 @@ const HistoryPage = () => {
   }, [search, tickets]);
 
   return (
-    <MobileShell title="History" subtitle="View your recent ticket purchases.">
+    <MobileShell title={t("history.title")} subtitle={t("history.subtitle")}>
       <main className="flex-1">
         <div className="max-w-sm mx-auto mt-4">
           <div className="mb-3">
             <label className="block text-xs font-medium text-slate-200 mb-1">
-              Search
+              {t("history.search")}
             </label>
             <input
               type="text"
-              placeholder="Search by route or destination"
+              placeholder={t("history.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
@@ -133,7 +135,7 @@ const HistoryPage = () => {
 
           {filteredTickets.length === 0 ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-5 text-center text-[12px] text-slate-400">
-              Ticket history will appear here after purchases are completed.
+              {t("history.empty")}
             </div>
           ) : (
             <div className="space-y-2">
@@ -160,19 +162,19 @@ const HistoryPage = () => {
                     </p>
                   </div>
                   <p className="mt-1 text-sm font-semibold text-white">
-                    Route {ticket.routeNumber}
+                    {t("history.routeLabel")} {ticket.routeNumber}
                   </p>
                   <p className="mt-1 text-xs text-slate-300">
-                    Bus number: {normalizeDisplayValue(ticket.busNumber) || "--"}
+                    {t("history.busNumberLabel")} {normalizeDisplayValue(ticket.busNumber) || "--"}
                   </p>
                   <p className="mt-1 text-xs text-slate-300">
-                    Departure time: {normalizeDisplayValue(ticket.departureTime) || "--"}
+                    {t("history.departureTimeLabel")} {normalizeDisplayValue(ticket.departureTime) || "--"}
                   </p>
                   <p className="mt-1 text-xs text-slate-300">
-                    Start destination: {normalizeDisplayValue(ticket.from) || "--"}
+                    {t("history.startDestinationLabel")} {normalizeDisplayValue(ticket.from) || "--"}
                   </p>
                   <p className="mt-1 text-xs text-slate-300">
-                    End destination: {normalizeDisplayValue(ticket.to) || "--"}
+                    {t("history.endDestinationLabel")} {normalizeDisplayValue(ticket.to) || "--"}
                   </p>
                   <div className="mt-2 flex items-center justify-between text-xs">
                     <span className="text-emerald-300">
@@ -203,16 +205,16 @@ const HistoryPage = () => {
 
               <div className="mt-4 rounded-xl border border-slate-700 bg-white p-3 flex items-center justify-center min-h-[220px]">
                 {isGeneratingQr ? (
-                  <p className="text-xs text-slate-500">Generating QR...</p>
+                  <p className="text-xs text-slate-500">{t("history.qrGenerating")}</p>
                 ) : qrImageDataUrl ? (
-                  <img src={qrImageDataUrl} alt="Ticket QR code" className="h-[200px] w-[200px]" />
+                  <img src={qrImageDataUrl} alt={t("history.qrAlt")} className="h-[200px] w-[200px]" />
                 ) : (
-                  <p className="text-xs text-red-500">Unable to generate QR code</p>
+                  <p className="text-xs text-red-500">{t("history.qrFailed")}</p>
                 )}
               </div>
 
               <p className="mt-3 text-[11px] text-slate-400 text-center">
-                Scan with camera to open this ticket in browser.
+                {t("history.scanHint")}
               </p>
 
               <button
@@ -220,7 +222,7 @@ const HistoryPage = () => {
                 onClick={handleCloseQr}
                 className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-white bg-white px-4 py-2 text-xs font-medium text-slate-900 hover:bg-slate-100"
               >
-                Close
+                {t("history.close")}
               </button>
             </div>
           </div>

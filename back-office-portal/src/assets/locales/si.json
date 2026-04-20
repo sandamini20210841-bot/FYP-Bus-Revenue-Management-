@@ -18,6 +18,13 @@
     "edit": "සංස්කරණය",
     "delete": "ඉවත් කරන්න",
     "export": "අපනයන"
+    ,
+    "buses": "බස්",
+    "summary": "සාරාංශය",
+    "timetable": "කාලසටහන",
+    "users": "භාවිතාකරුවන්",
+    "profile": "ප්‍රොෆයිලය",
+    "manageBuses": "මාර්ගයන්ට පැවති බස් පාලනය කරන්න."
   },
   "dashboard": {
     "title": "උපකරණ පුවරුව",
@@ -25,7 +32,17 @@
     "totalTransactions": "සම්පූර්ණ ගනුදෙනු",
     "revenueLoss": "ආදායම් අපයෝජනය",
     "totalDiscrepancies": "සම්පූර්ණ ඒවා සමපාත නොවීම",
-    "recentAlerts": "මෑතකාලීන අවවාද"
+    "recentAlerts": "මෑතකාලීන අවවාද",
+    "recentDiscrepancies": "මෑතකාලීන තුළ තිබූ විෂමතා",
+    "noRecent": "පෙන්වීමට මෑත විෂමතා නොමැත."
+  },
+  "actions": {
+    "viewAll": "සියල්ල බලන්න"
+  },
+  "auth": {
+    "signIn": "පුරන්න",
+    "createAccount": "ගිණුම සාදන්න",
+    "forgotPassword": "මුරපදය මතක නැතිද"
   },
   "discrepancies": {
     "title": "ඒවා සමපාත නොවීම ඉතිහාසය",
@@ -42,12 +59,37 @@
   },
   "reports": {
     "title": "වාර්තා",
-    "generateReport": "වාර්තා සාදන්න",
-    "daily": "දෛනිකი",
+    "description": "විශ්ලේෂණ සඳහා විස්තරාත්මක ගනුදෙනු දත්ත බාගන්න.",
+    "filterTransactions": "ගනුදෙනු පෙරහන්",
+    "search": "සොයන්න",
+    "searchPlaceholder": "ටිකට්, මාර්ගය, බස් අංකය, ආරම්භ හෝ අවසානතා ගමනාන්තය අනුව සෙවීම...",
+    "busNumber": "බස් අංකය",
+    "allBusNumbers": "සියලුම බස් අංක",
+    "route": "මාර්ගය",
+    "allRoutes": "සියලුම මාර්ග",
+    "exportAll": "සියලු ගනුදෙනු අපනයනය කරන්න",
+    "exportToday": "අද ගනුදෙනු",
+    "exportCustomRange": "අභිරුචි පරාසය",
+    "transactionDetails": "ගනුදෙනු විස්තර",
+    "noData": "ටිකට් මිලදී ගැනීමෙන් පසු මෙහි ගනුදෙනු දත්ත පෙන්වනු ඇත.",
+    "totalLabel": "මුළු එකතුව:",
+    "transactions": "ගනුදෙනු",
+    "headers": {
+      "route": "මාර්ගය",
+      "ticket": "ටිකට් අංකය",
+      "bus": "බස් අංකය",
+      "date": "දිනය",
+      "time": "වේලාව",
+      "amount": "ප්රමාණය",
+      "start": "ආරම්භක ගමනාන්තය",
+      "end": "අවසන් ගමනාන්තය"
+    },
+    "generateReport": "වාර්තාවක් සාදන්න",
+    "daily": "දෛනික",
     "allTime": "සෑම කාලයකම",
-    "ticketSales": "තිකට් විකිණීම",
-    "exportCSV": "CSV ලෙස අපනයන",
-    "dateRange": "දින පරාසය",
+    "ticketSales": "ටිකට් අලෙවිය",
+    "exportCSV": "CSV ලෙස අපනයනය",
+    "dateRange": "දිනය පරාසය",
     "from": "සිට",
     "to": "දක්වා"
   },

@@ -920,11 +920,24 @@ func GetDiscrepancyStats(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to prepare discrepancies schema"})
 	}
 
+	role := normalizeRole(fmt.Sprint(c.Locals("userRole")))
+	actorUserID := strings.TrimSpace(fmt.Sprint(c.Locals("userId")))
+
+	// For bus owners, limit stats to discrepancies affecting their registered buses.
+	whereClause := ""
+	var whereArgs []interface{}
+	if role == "bus_owner" && actorUserID != "" && actorUserID != "<nil>" {
+		whereClause = ` WHERE d.bus_number IN (
+			SELECT b.bus_number FROM buses b WHERE b.owner_user_id = $1 OR b.created_by = $1
+		)`
+		whereArgs = append(whereArgs, actorUserID)
+	}
+
 	var total int
-	_ = database.QueryRow(`SELECT COUNT(*) FROM discrepancies`).Scan(&total)
+	_ = database.QueryRow(`SELECT COUNT(*) FROM discrepancies d`+whereClause, whereArgs...).Scan(&total)
 
 	byStatus := fiber.Map{}
-	statusRows, _ := database.Query(`SELECT status, COUNT(*) FROM discrepancies GROUP BY status`)
+	statusRows, _ := database.Query(`SELECT COALESCE(status, ''), COUNT(*) FROM discrepancies d`+whereClause+` GROUP BY COALESCE(status, '')`, whereArgs...)
 	if statusRows != nil {
 		defer statusRows.Close()
 		for statusRows.Next() {
@@ -937,7 +950,7 @@ func GetDiscrepancyStats(c *fiber.Ctx) error {
 	}
 
 	byRoute := fiber.Map{}
-	routeRows, _ := database.Query(`SELECT COALESCE(r.route_number, ''), COUNT(*) FROM discrepancies d LEFT JOIN routes r ON r.id = d.route_id GROUP BY COALESCE(r.route_number, '')`)
+	routeRows, _ := database.Query(`SELECT COALESCE(r.route_number, ''), COUNT(*) FROM discrepancies d LEFT JOIN routes r ON r.id = d.route_id `+whereClause+` GROUP BY COALESCE(r.route_number, '')`, whereArgs...)
 	if routeRows != nil {
 		defer routeRows.Close()
 		for routeRows.Next() {
@@ -950,7 +963,7 @@ func GetDiscrepancyStats(c *fiber.Ctx) error {
 	}
 
 	bySeverity := fiber.Map{}
-	severityRows, _ := database.Query(`SELECT COALESCE(severity, ''), COUNT(*) FROM discrepancies GROUP BY COALESCE(severity, '')`)
+	severityRows, _ := database.Query(`SELECT COALESCE(severity, ''), COUNT(*) FROM discrepancies d`+whereClause+` GROUP BY COALESCE(severity, '')`, whereArgs...)
 	if severityRows != nil {
 		defer severityRows.Close()
 		for severityRows.Next() {
@@ -963,7 +976,7 @@ func GetDiscrepancyStats(c *fiber.Ctx) error {
 	}
 
 	var totalLoss float64
-	_ = database.QueryRow(`SELECT COALESCE(SUM(loss_amount), 0) FROM discrepancies`).Scan(&totalLoss)
+	_ = database.QueryRow(`SELECT COALESCE(SUM(loss_amount), 0) FROM discrepancies d`+whereClause, whereArgs...).Scan(&totalLoss)
 
 	return c.JSON(fiber.Map{
 		"totalDiscrepancies": total,

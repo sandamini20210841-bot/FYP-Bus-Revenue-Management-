@@ -1,8 +1,12 @@
 import { FormEvent, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useDispatch } from "react-redux";
+import { setLanguage } from "../store/slices/uiSlice";
 import MobileShell from "../layout/MobileShell";
 import api from "../utils/axios";
 
 const SettingsPage = () => {
+  const { t } = useTranslation();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -53,22 +57,20 @@ const SettingsPage = () => {
   };
 
   return (
-    <MobileShell title="Settings" subtitle="Manage your app preferences.">
+    <MobileShell title={t("common.settings")} subtitle={t("settings.subtitle")}>
       <div className="max-w-sm mx-auto mt-4 space-y-4 text-xs">
         <section className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-          <h2 className="text-[13px] font-semibold mb-2">Account</h2>
-          <p className="text-slate-400 mb-2">
-            Basic information about your account. You can edit your profile details from the Profile screen.
-          </p>
+          <h2 className="text-[13px] font-semibold mb-2">{t("settings.account")}</h2>
+          <p className="text-slate-400 mb-2">{t("settings.accountDescription")}</p>
           <ul className="space-y-1.5 text-slate-300 mb-3">
             <li className="flex items-center justify-between">
-              <span className="text-slate-400">Profile</span>
-              <span className="text-slate-200 text-[11px]">View and edit from Profile</span>
+              <span className="text-slate-400">{t("profile.myProfile")}</span>
+              <span className="text-slate-200 text-[11px]">{t("settings.viewEditProfile")}</span>
             </li>
           </ul>
 
           <div className="mt-3 border-t border-slate-800 pt-3">
-            <h3 className="text-[12px] font-semibold mb-2">Change password</h3>
+            <h3 className="text-[12px] font-semibold mb-2">{t("settings.changePassword")}</h3>
             {changeError && (
               <div className="mb-2 rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-red-200">
                 {changeError}
@@ -82,16 +84,14 @@ const SettingsPage = () => {
 
             <form onSubmit={handleChangePassword} className="space-y-2">
               <div>
-                <label className="block text-xs font-medium text-slate-200 mb-1">
-                  Current password
-                </label>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">{t("auth.password")}</label>
                 <div className="relative">
                   <input
                     type={showCurrentPassword ? "text" : "password"}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
-                    placeholder="Enter your current password"
+                    placeholder={t("settings.enterCurrentPassword")}
                   />
                   <button
                     type="button"
@@ -134,16 +134,14 @@ const SettingsPage = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-200 mb-1">
-                  New password
-                </label>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">{t("settings.newPassword")}</label>
                 <div className="relative">
                   <input
                     type={showNewPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
-                    placeholder="At least 8 characters"
+                    placeholder={t("settings.newPasswordPlaceholder")}
                   />
                   <button
                     type="button"
@@ -186,9 +184,7 @@ const SettingsPage = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-200 mb-1">
-                  Confirm new password
-                </label>
+                <label className="block text-xs font-medium text-slate-200 mb-1">{t("auth.confirmPassword")}</label>
                 <input
                   type="password"
                   value={confirmPassword}
@@ -203,31 +199,27 @@ const SettingsPage = () => {
                 disabled={changing}
                 className="mt-1 inline-flex w-full items-center justify-center rounded-lg border border-white bg-white px-4 py-2 text-xs font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70 disabled:opacity-60"
               >
-                {changing ? "Updating..." : "Update password"}
+                {changing ? t("settings.updating") : t("settings.updatePassword")}
               </button>
             </form>
           </div>
         </section>
 
         <section className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-          <h2 className="text-[13px] font-semibold mb-2">Notifications</h2>
-          <p className="text-slate-400 text-[11px]">
-            Notification preferences will be configurable here in a future version.
-          </p>
+          <h2 className="text-[13px] font-semibold mb-2">{t("settings.notifications")}</h2>
+          <p className="text-slate-400 text-[11px]">{t("settings.notificationsDescription")}</p>
         </section>
 
         <section className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-          <h2 className="text-[13px] font-semibold mb-2">App</h2>
-          <p className="text-slate-400 text-[11px] mb-1">
-            Default settings for language and theme.
-          </p>
+          <h2 className="text-[13px] font-semibold mb-2">{t("settings.app")}</h2>
+          <p className="text-slate-400 text-[11px] mb-1">{t("settings.appDescription")}</p>
           <div className="flex items-center justify-between py-1">
-            <span className="text-slate-300">Language</span>
-            <span className="text-slate-400 text-[11px]">English (default)</span>
+            <span className="text-slate-300">{t("profile.language")}</span>
+            <LanguageSelector />
           </div>
           <div className="flex items-center justify-between py-1">
-            <span className="text-slate-300">Theme</span>
-            <span className="text-slate-400 text-[11px]">Dark</span>
+            <span className="text-slate-300">{t("settings.theme")}</span>
+            <span className="text-slate-400 text-[11px]">{t("settings.themeValue")}</span>
           </div>
         </section>
 
@@ -240,3 +232,29 @@ const SettingsPage = () => {
 };
 
 export default SettingsPage;
+
+const LanguageSelector: React.FC = () => {
+  const { i18n, t } = useTranslation();
+  const dispatch = useDispatch();
+  const current = (i18n.language || localStorage.getItem("language") || "en").slice(0,2) as "en" | "ta" | "si";
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const next = e.target.value as "en" | "ta" | "si";
+    i18n.changeLanguage(next);
+    try { localStorage.setItem("language", next); } catch {}
+    dispatch(setLanguage(next));
+  };
+
+  return (
+    <select
+      value={current}
+      onChange={handleChange}
+      className="rounded-md bg-slate-900/40 border border-slate-800 text-slate-200 text-[11px] px-2 py-1"
+      aria-label="Select language"
+    >
+      <option value="en">{t("languages.en")}</option>
+      <option value="ta">{t("languages.ta")}</option>
+      <option value="si">{t("languages.si")}</option>
+    </select>
+  );
+};

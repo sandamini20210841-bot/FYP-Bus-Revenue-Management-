@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../utils/axios";
+import { useTranslation } from "react-i18next";
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState("");
@@ -28,13 +29,13 @@ const ForgotPasswordPage = () => {
     }
   };
 
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
       <div className="w-full max-w-md rounded-2xl bg-slate-900/80 border border-slate-800 p-8 shadow-xl">
-        <h1 className="text-2xl font-semibold text-white mb-2">Forgot password</h1>
-        <p className="text-sm text-slate-400 mb-6">
-          Enter the email associated with your account. If it exists, we&apos;ll send instructions to reset your password.
-        </p>
+        <h1 className="text-2xl font-semibold text-white mb-2">{t("auth.forgotPassword")}</h1>
+        <p className="text-sm text-slate-400 mb-6">{t("auth.forgotPassword")}</p>
 
         {message && (
           <div className="mb-4 rounded-lg bg-emerald-500/10 border border-emerald-500/40 px-3 py-2 text-sm text-emerald-200">
@@ -68,17 +69,14 @@ const ForgotPasswordPage = () => {
             disabled={submitting}
             className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:ring-offset-0 disabled:opacity-60"
           >
-            {submitting ? "Sending..." : "Send reset link"}
+            {submitting ? t("common.loading") : t("auth.forgotPassword")}
           </button>
         </form>
 
         <p className="mt-6 text-xs text-slate-400 text-center">
           Remembered your password?{" "}
-          <Link
-            to="/login"
-            className="font-medium text-emerald-400 hover:text-emerald-300"
-          >
-            Back to sign in
+          <Link to="/login" className="font-medium text-emerald-400 hover:text-emerald-300">
+            {t("auth.signIn")}
           </Link>
         </p>
       </div>

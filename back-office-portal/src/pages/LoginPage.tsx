@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../store";
@@ -92,13 +93,13 @@ const LoginPage = () => {
     }
   };
 
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
       <div className="w-full max-w-md rounded-2xl bg-slate-900/80 border border-slate-800 p-8 shadow-xl">
-        <h1 className="text-2xl font-semibold text-white mb-2">Sign in</h1>
-        <p className="text-sm text-slate-400 mb-6">
-          Sign in to access the dashboard, discrepancies, routes and more.
-        </p>
+        <h1 className="text-2xl font-semibold text-white mb-2">{t("auth.signIn")}</h1>
+        <p className="text-sm text-slate-400 mb-6">{t("auth.signIn")}</p>
 
         {localError && (
           <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-sm text-red-200">
@@ -179,7 +180,7 @@ const LoginPage = () => {
               to="/forgot-password"
               className="text-xs font-medium text-emerald-400 hover:text-emerald-300"
             >
-              Forgot password?
+              {t("auth.forgotPassword")}
             </Link>
           </div>
 
@@ -188,18 +189,15 @@ const LoginPage = () => {
             disabled={submitting}
             className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:ring-offset-0 disabled:opacity-60"
           >
-            {submitting ? "Signing in..." : "Sign in"}
+            {submitting ? t("common.loading") : t("auth.signIn")}
           </button>
         </form>
 
         <p className="mt-6 text-xs text-slate-400 text-center">
-          Don&apos;t have an account?{" "}
-          <Link
-            to="/register"
-            className="font-medium text-emerald-400 hover:text-emerald-300"
-          >
-            Create one
-          </Link>
+            Don&apos;t have an account?{" "}
+            <Link to="/register" className="font-medium text-emerald-400 hover:text-emerald-300">
+              {t("auth.createAccount")}
+            </Link>
         </p>
       </div>
     </div>

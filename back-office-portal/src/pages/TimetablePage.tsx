@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../utils/axios";
 
 type RouteSummary = {
@@ -62,6 +63,7 @@ const buildMonthDays = (monthCursor: Date): Date[] => {
 };
 
 const TimetablePage: React.FC = () => {
+  const { t } = useTranslation();
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,10 +153,7 @@ const TimetablePage: React.FC = () => {
       setTurnToAssign("");
       return;
     }
-    if (!availableTurns.includes(Number(turnToAssign))) {
-      setTurnToAssign(String(availableTurns[0]));
-    }
-  }, [availableTurns, turnToAssign]);
+  }, [availableTurns]);
 
   useEffect(() => {
     const loadRoutes = async () => {

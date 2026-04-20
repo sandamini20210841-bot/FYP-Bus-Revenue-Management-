@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import api from "../utils/axios";
 import { useAccessPermissions } from "../hooks/useAccessPermissions";
@@ -22,10 +23,23 @@ const BusesPage: React.FC = () => {
   const canCreateBus = canCreate("buses");
   const canEditBus = canEdit("buses");
   const canDeleteBus = canDelete("buses");
-  const currentRole = (useSelector((state: RootState) => state.auth.user?.role) || "")
-    .toString()
-    .toLowerCase();
-  const showBusOwnerColumn = currentRole === "admin" || currentRole === "time_keeper";
+  const userFromStore = useSelector((state: RootState) => state.auth.user);
+  const currentRole = (() => {
+    if (userFromStore?.role) return userFromStore.role.toLowerCase();
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem("authUser");
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { role?: string };
+          return (parsed.role || "admin").toLowerCase();
+        } catch {
+          // ignore
+        }
+      }
+    }
+    return "admin";
+  })();
+  const showBusOwnerColumn = currentRole === "admin";
 
   const [buses, setBuses] = useState<BusRow[]>([]);
   const [routes, setRoutes] = useState<RouteOption[]>([]);
@@ -155,11 +169,13 @@ const BusesPage: React.FC = () => {
     }
   };
 
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Buses</h1>
-        <p className="text-sm text-slate-500">Manage buses assigned to routes.</p>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">{t("common.buses")}</h1>
+        <p className="text-sm text-slate-500">{t("common.manageBuses")}</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

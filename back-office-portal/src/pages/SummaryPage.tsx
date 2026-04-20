@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../utils/axios";
 
 type RouteSummary = {
@@ -26,6 +27,7 @@ const SummaryPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [departures, setDepartures] = useState<DepartureItem[]>([]);
+  const [hasSetup, setHasSetup] = useState<boolean | null>(null);
   const [isDepartureLoading, setIsDepartureLoading] = useState(false);
   const [selectedDeparture, setSelectedDeparture] = useState<DepartureItem | null>(null);
 
@@ -88,6 +90,13 @@ const SummaryPage: React.FC = () => {
           ? response.data.departures
           : [];
         setDepartures(rows);
+        // backend now returns has_setup:false when no timetable is configured
+        if (typeof response.data?.has_setup === "boolean") {
+          setHasSetup(response.data.has_setup);
+        } else {
+          // default to true for older backend responses
+          setHasSetup(true);
+        }
       } catch {
         setDepartures([]);
         setError("Failed to load departures for selected route/date.");
@@ -99,13 +108,13 @@ const SummaryPage: React.FC = () => {
     void loadDepartures();
   }, [selectedRouteId, selectedDate]);
 
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Route Summary</h1>
-        <p className="text-sm text-slate-500">
-          Select a route to view the bus departure timetable.
-        </p>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">{t("common.summary")}</h1>
+        <p className="text-sm text-slate-500">{t("routes.title")}</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
@@ -162,19 +171,29 @@ const SummaryPage: React.FC = () => {
         )}
 
         {selectedRoute && !isDepartureLoading && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-            {departures.map((item) => (
-              <button
-                type="button"
-                key={`${item.date}-${item.departure_time}-${item.bus_number}-${item.turn_number || ""}`}
-                onClick={() => setSelectedDeparture(item)}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center hover:bg-blue-50"
-              >
-                <p className="text-xs text-slate-500">Departure</p>
-                <p className="text-sm font-semibold text-slate-800">{item.departure_time}</p>
-              </button>
-            ))}
-          </div>
+          <>
+            {departures.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {departures.map((item) => (
+                  <button
+                    type="button"
+                    key={`${item.date}-${item.departure_time}-${item.bus_number}-${item.turn_number || ""}`}
+                    onClick={() => setSelectedDeparture(item)}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center hover:bg-blue-50"
+                  >
+                    <p className="text-xs text-slate-500">Departure</p>
+                    <p className="text-sm font-semibold text-slate-800">{item.departure_time}</p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">
+                {hasSetup === false
+                  ? "No timetable created for this date."
+                  : "No departures assigned for this date."}
+              </p>
+            )}
+          </>
         )}
 
         {isDepartureLoading && (

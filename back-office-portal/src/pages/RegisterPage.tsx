@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../utils/axios";
 import type { AxiosError } from "axios";
+import { useTranslation } from "react-i18next";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -59,13 +60,13 @@ const RegisterPage = () => {
     }
   };
 
+  const { t } = useTranslation();
+
   return (
     <div className="h-screen overflow-hidden flex items-center justify-center bg-slate-950 px-4 py-4">
       <div className="w-full max-w-2xl rounded-2xl bg-slate-900/80 border border-slate-800 p-6 shadow-xl">
-        <h1 className="text-2xl font-semibold text-white mb-1">Create account</h1>
-        <p className="text-sm text-slate-400 mb-4">
-          Create an account to access the back-office dashboard.
-        </p>
+        <h1 className="text-2xl font-semibold text-white mb-1">{t("auth.createAccount")}</h1>
+        <p className="text-sm text-slate-400 mb-4">{t("auth.createAccount")}</p>
 
         {error && (
           <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-sm text-red-200">
@@ -191,12 +192,6 @@ const RegisterPage = () => {
                   )}
                 </button>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-200 mb-1">
-                Confirm password <span className="text-red-500">*</span>
-              </label>
               <input
                 type="password"
                 value={confirmPassword}

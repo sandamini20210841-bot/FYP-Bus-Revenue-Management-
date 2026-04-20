@@ -6,6 +6,7 @@ import { setUser } from "../store/slices/authSlice";
 import { addNotification } from "../store/slices/uiSlice";
 import api from "../utils/axios";
 import MobileShell from "../layout/MobileShell";
+import { useTranslation } from "react-i18next";
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -60,6 +61,7 @@ const ProfilePage = () => {
     loadFromBackend();
   }, [dispatch, navigate]);
 
+  const { t } = useTranslation();
   const data = profile;
 
   const handleCopyUserId = () => {
@@ -82,16 +84,16 @@ const ProfilePage = () => {
 
   if (!data) {
     return (
-      <MobileShell title="Profile">
+      <MobileShell title={t("profile.myProfile")}>{/* fallback while loading */}
         <div className="min-h-[50vh] flex items-center justify-center text-xs">
-          Loading profile...
+          {t("profile.loading")}
         </div>
       </MobileShell>
     );
   }
 
   return (
-    <MobileShell title="Profile" subtitle="View your account details.">
+    <MobileShell title={t("profile.myProfile")} subtitle={t("profile.viewDetails")}>
       <main className="flex-1">
         <div className="max-w-sm mx-auto mt-4 space-y-4">
           <div className="flex items-center space-x-3">
@@ -111,35 +113,33 @@ const ProfilePage = () => {
               className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-800/40"
               onClick={handleCopyUserId}
             >
-              <span className="text-slate-400">User ID</span>
+              <span className="text-slate-400">{t("profile.userId")}</span>
               <span className="text-slate-100 ml-4 max-w-[55%] truncate text-right">
                 {data.id || "-"}
               </span>
             </div>
             <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-slate-400">Email</span>
+              <span className="text-slate-400">{t("profile.email")}</span>
               <span className="text-slate-100 ml-4 text-right">
                 {data.email || "-"}
               </span>
             </div>
             <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-slate-400">Phone number</span>
+              <span className="text-slate-400">{t("profile.phoneNumber")}</span>
               <span className="text-slate-100 ml-4 text-right">
                 {data.phoneNumber || "-"}
               </span>
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500">
-            Tap your User ID above to copy it.
-          </p>
+          <p className="text-[11px] text-slate-500">{t("profile.copyIdHint")}</p>
 
           <div className="pt-2 flex justify-end">
             <Link
               to="/profile/edit"
               className="inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
             >
-              Edit profile
+              {t("profile.editProfile")}
             </Link>
           </div>
         </div>

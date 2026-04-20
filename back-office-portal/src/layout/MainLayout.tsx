@@ -1,4 +1,5 @@
 import React, { ReactNode, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "../store";
@@ -19,6 +20,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const userFromStore = useSelector((state: RootState) => state.auth.user);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { canView } = useAccessPermissions();
+  const { t } = useTranslation();
 
   const fullName = useMemo(() => {
     if (userFromStore?.fullName) return userFromStore.fullName;
@@ -134,8 +136,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <nav className="flex-1 px-3 py-4 space-y-1">
           {canView("dashboard") && (
           <NavLink
-            to="/"
-            end
+            to="/dashboard"
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
@@ -157,7 +158,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <rect x="11" y="11" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.4" />
               </svg>
             </span>
-            <span>Dashboard</span>
+            <span>{t("common.dashboard")}</span>
           </NavLink>
           )}
 
@@ -202,7 +203,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 />
               </svg>
             </span>
-            <span>Discrepancies</span>
+            <span>{t("common.discrepancies")}</span>
           </NavLink>
           )}
 
@@ -247,7 +248,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 />
               </svg>
             </span>
-            <span>Routes</span>
+            <span>{t("common.routes")}</span>
           </NavLink>
           )}
 
@@ -274,7 +275,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <circle cx="13" cy="13.5" r="1" fill="currentColor" />
               </svg>
             </span>
-            <span>Buses</span>
+            <span>{t("common.buses")}</span>
           </NavLink>
           )}
 
@@ -319,7 +320,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <circle cx="14" cy="14.5" r="1" fill="currentColor" />
               </svg>
             </span>
-            <span>Summary</span>
+            <span>{t("common.summary")}</span>
           </NavLink>
           )}
 
@@ -347,7 +348,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <path d="M13 3V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </span>
-            <span>Timetable</span>
+            <span>{t("common.timetable")}</span>
           </NavLink>
           )}
 
@@ -399,7 +400,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 />
               </svg>
             </span>
-            <span>Reports</span>
+            <span>{t("common.reports")}</span>
           </NavLink>
           )}
 
@@ -427,7 +428,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <path d="M11.5 12H12.5C14.15 12 15.6 12.95 16.25 14.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </span>
-            <span>Users</span>
+            <span>{t("common.users")}</span>
           </NavLink>
           )}
 
@@ -455,7 +456,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   <path d="M7 12.75H11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                 </svg>
               </span>
-              <span>Audit Logs</span>
+              <span>{t("common.auditLogs")}</span>
             </NavLink>
           )}
         </nav>
@@ -530,7 +531,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                       strokeLinejoin="round"
                     />
                   </svg>
-                  <span>Profile</span>
+                  <span>{t("common.profile")}</span>
                 </span>
               </button>
               <button
@@ -563,7 +564,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                       strokeLinejoin="round"
                     />
                   </svg>
-                  <span>Settings</span>
+                  <span>{t("common.settings")}</span>
                 </span>
               </button>
               <button
@@ -601,7 +602,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                       strokeLinejoin="round"
                     />
                   </svg>
-                  <span>Logout</span>
+                  <span>{t("common.logout")}</span>
                 </span>
               </button>
             </div>
