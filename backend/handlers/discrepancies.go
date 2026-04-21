@@ -146,10 +146,9 @@ func severityFromLoss(dropPct float64, lossAmount float64) string {
 }
 
 func upsertSystemDiscrepancy(routeID sql.NullString, busNumber string, serviceDate time.Time, expectedDaily float64, expectedWeekly float64, expectedMonthly float64, actualDaily float64, actualWeekly float64, actualMonthly float64, lossAmount float64, anomalyScore float64, severity string, notes string) (bool, bool, error) {
-	var inserted bool
-	var updated bool
-
-	err := database.QueryRow(
+	// Insert-only behavior: create a discrepancy row if one doesn't already exist
+	// for the same bus_number and transaction_date. Do not update existing rows.
+	res, err := database.Exec(
 		`INSERT INTO discrepancies (
 			route_id,
 			bus_number,
@@ -189,28 +188,7 @@ func upsertSystemDiscrepancy(routeID sql.NullString, busNumber string, serviceDa
 			NOW(),
 			true
 		)
-		ON CONFLICT (bus_number, transaction_date) DO UPDATE SET
-			route_id = EXCLUDED.route_id,
-			expected_revenue = EXCLUDED.expected_revenue,
-			actual_revenue = EXCLUDED.actual_revenue,
-			loss_amount = EXCLUDED.loss_amount,
-			severity = EXCLUDED.severity,
-			notes = EXCLUDED.notes,
-			expected_daily_revenue = EXCLUDED.expected_daily_revenue,
-			expected_weekly_revenue = EXCLUDED.expected_weekly_revenue,
-			expected_monthly_revenue = EXCLUDED.expected_monthly_revenue,
-			actual_weekly_revenue = EXCLUDED.actual_weekly_revenue,
-			actual_monthly_revenue = EXCLUDED.actual_monthly_revenue,
-			anomaly_score = EXCLUDED.anomaly_score,
-			detection_method = EXCLUDED.detection_method,
-			detection_run_at = NOW(),
-			updated_at = NOW(),
-			is_system_generated = true,
-			status = CASE
-				WHEN discrepancies.status = 'resolved' THEN discrepancies.status
-				ELSE discrepancies.status
-			END
-		RETURNING (xmax = 0), (xmax <> 0)`,
+		ON CONFLICT (bus_number, transaction_date) DO NOTHING`,
 		routeID,
 		busNumber,
 		serviceDate.Format("2006-01-02"),
@@ -225,9 +203,13 @@ func upsertSystemDiscrepancy(routeID sql.NullString, busNumber string, serviceDa
 		actualWeekly,
 		actualMonthly,
 		anomalyScore,
-	).Scan(&inserted, &updated)
-
-	return inserted, updated, err
+	)
+	if err != nil {
+		return false, false, err
+	}
+	ra, _ := res.RowsAffected()
+	inserted := ra > 0
+	return inserted, false, nil
 }
 
 func runDiscrepancyAnalysis(days int) (analysisSummary, error) {
@@ -427,6 +409,155 @@ func AnalyzeDiscrepancies(c *fiber.Ctx) error {
 	})
 }
 
+// RunDiscrepancyAnalysisNow runs the discrepancy analysis logic outside of an HTTP request.
+// It returns an error if the analysis failed.
+func RunDiscrepancyAnalysisNow(days int) error {
+	_, err := runDiscrepancyAnalysis(days)
+	return err
+}
+
+// RunDiscrepancyForBusDate runs the anomaly check for a single bus and service date.
+// routeID may be empty. serviceDate must be YYYY-MM-DD.
+func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate string) error {
+	if strings.TrimSpace(busNumber) == "" {
+		return fmt.Errorf("bus number required")
+	}
+	sd, err := time.Parse("2006-01-02", serviceDate)
+	if err != nil {
+		return fmt.Errorf("invalid service date")
+	}
+
+	// Look back up to 365 days for history
+	startDate := sd.AddDate(0, 0, -365).Format("2006-01-02")
+	endDate := sd.Format("2006-01-02")
+
+	rows, qErr := database.Query(
+		`SELECT tr.transaction_date::date AS d, COALESCE(SUM(tr.amount),0) AS revenue
+		 FROM transactions tr
+		 LEFT JOIN tickets t ON t.ticket_number = tr.ticket_id
+		 WHERE LOWER(COALESCE(tr.status,'')) = 'completed'
+		   AND COALESCE(t.bus_number,'') = $1
+		   AND tr.transaction_date::date >= $2::date
+		   AND tr.transaction_date::date <= $3::date
+		 GROUP BY tr.transaction_date::date
+		 ORDER BY tr.transaction_date::date ASC`,
+		busNumber, startDate, endDate,
+	)
+	if qErr != nil {
+		return qErr
+	}
+	defer rows.Close()
+
+	revByDate := map[string]float64{}
+	var d time.Time
+	var rev float64
+	for rows.Next() {
+		if err := rows.Scan(&d, &rev); err != nil {
+			continue
+		}
+		revByDate[d.Format("2006-01-02")] = rev
+	}
+
+	actualDaily := revByDate[sd.Format("2006-01-02")]
+
+	// collect same-weekday historical revenues prior to service date
+	sameWeekday := []float64{}
+	for dtStr, v := range revByDate {
+		dt, p := time.Parse("2006-01-02", dtStr)
+		if p != nil {
+			continue
+		}
+		if !dt.Before(sd) {
+			continue
+		}
+		if dt.Weekday() == sd.Weekday() {
+			sameWeekday = append(sameWeekday, v)
+		}
+	}
+
+	// sort by date descending to pick recent values
+	sort.Slice(sameWeekday, func(i, j int) bool { return true })
+	// We only need up to 8 previous same-weekday values; ensure we have oldest->newest order is not necessary for mean
+	if len(sameWeekday) < 4 {
+		// not enough history to make a call
+		return nil
+	}
+
+	expectedDaily := mean(sameWeekday)
+	if expectedDaily <= 0 {
+		return nil
+	}
+
+	dailyStd := stddev(sameWeekday, expectedDaily)
+	loss := expectedDaily - actualDaily
+	if loss <= 0 {
+		return nil
+	}
+	dropPct := (loss / expectedDaily) * 100
+	zScore := 0.0
+	if dailyStd > 0 {
+		zScore = (actualDaily - expectedDaily) / dailyStd
+	}
+
+	// weekly and monthly totals
+	weeklyTotals := map[string]float64{}
+	monthlyTotals := map[string]float64{}
+	for dtStr, v := range revByDate {
+		dt, p := time.Parse("2006-01-02", dtStr)
+		if p != nil {
+			continue
+		}
+		wk := weekStartMonday(dt).Format("2006-01-02")
+		monthlyKey := monthStart(dt).Format("2006-01-02")
+		weeklyTotals[wk] += v
+		monthlyTotals[monthlyKey] += v
+	}
+
+	weekStart := weekStartMonday(sd).Format("2006-01-02")
+	actualWeekly := weeklyTotals[weekStart]
+	priorWeekly := []float64{}
+	for i := 1; i <= 4; i++ {
+		k := weekStartMonday(sd).AddDate(0, 0, -7*i).Format("2006-01-02")
+		if v, ok := weeklyTotals[k]; ok {
+			priorWeekly = append(priorWeekly, v)
+		}
+	}
+	expectedWeekly := mean(priorWeekly)
+
+	monthKey := monthStart(sd).Format("2006-01-02")
+	actualMonthly := monthlyTotals[monthKey]
+	priorMonthly := []float64{}
+	for i := 1; i <= 3; i++ {
+		k := monthStart(sd).AddDate(0, -i, 0).Format("2006-01-02")
+		if v, ok := monthlyTotals[k]; ok {
+			priorMonthly = append(priorMonthly, v)
+		}
+	}
+	expectedMonthly := mean(priorMonthly)
+
+	weeklyWeak := expectedWeekly <= 0 || actualWeekly <= expectedWeekly*0.85
+	monthlyWeak := expectedMonthly <= 0 || actualMonthly <= expectedMonthly*0.90
+	isAnomaly := (dropPct >= 20 && loss >= 2000 && weeklyWeak && monthlyWeak) || (zScore <= -2.5 && loss >= 2000)
+	if !isAnomaly {
+		return nil
+	}
+
+	severity := severityFromLoss(dropPct, loss)
+	anomalyScore := math.Abs(zScore)
+	if anomalyScore == 0 {
+		anomalyScore = dropPct / 10
+	}
+
+	notes := fmt.Sprintf("System-detected anomaly (time-series residual model): expected daily %.2f vs actual %.2f (drop %.1f%%).", expectedDaily, actualDaily, dropPct)
+	routeNull := sql.NullString{}
+	if strings.TrimSpace(routeID) != "" {
+		routeNull = sql.NullString{String: routeID, Valid: true}
+	}
+
+	_, _, upErr := upsertSystemDiscrepancy(routeNull, busNumber, sd, expectedDaily, expectedWeekly, expectedMonthly, actualDaily, actualWeekly, actualMonthly, loss, anomalyScore, severity, notes)
+	return upErr
+}
+
 func normalizeDiscrepancyStatus(value string) string {
 	status := strings.ToLower(strings.TrimSpace(value))
 	switch status {
@@ -476,122 +607,7 @@ func resolveRouteID(routeID string, routeNumber string) (string, error) {
 	return "", fiber.NewError(fiber.StatusBadRequest, "route_id or route_number is required")
 }
 
-// CreateDiscrepancy creates a discrepancy record
-func CreateDiscrepancy(c *fiber.Ctx) error {
-	if err := enforceModulePermission(c, "discrepancies", "create"); err != nil {
-		return err
-	}
-
-	if err := ensureDiscrepanciesSchema(); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to prepare discrepancies schema"})
-	}
-
-	type CreateDiscrepancyRequest struct {
-		RouteID         string  `json:"route_id"`
-		RouteNumber     string  `json:"route_number"`
-		BusNumber       string  `json:"bus_number"`
-		TransactionDate string  `json:"transaction_date"`
-		ExpectedRevenue float64 `json:"expected_revenue"`
-		ActualRevenue   float64 `json:"actual_revenue"`
-		Status          string  `json:"status"`
-		Severity        string  `json:"severity"`
-		Notes           string  `json:"notes"`
-	}
-
-	var req CreateDiscrepancyRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-
-	routeID, routeErr := resolveRouteID(req.RouteID, req.RouteNumber)
-	if routeErr != nil {
-		if fe, ok := routeErr.(*fiber.Error); ok {
-			return c.Status(fe.Code).JSON(fiber.Map{"error": fe.Message})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to resolve route"})
-	}
-
-	busNumber := strings.TrimSpace(req.BusNumber)
-	if busNumber == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "bus_number is required"})
-	}
-
-	transactionDate := strings.TrimSpace(req.TransactionDate)
-	if transactionDate == "" {
-		transactionDate = time.Now().Format("2006-01-02")
-	}
-	if _, err := time.Parse("2006-01-02", transactionDate); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "transaction_date must be YYYY-MM-DD"})
-	}
-
-	if req.ExpectedRevenue < 0 || req.ActualRevenue < 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Revenue values must be non-negative"})
-	}
-
-	status := normalizeDiscrepancyStatus(req.Status)
-	if status == "" {
-		status = "pending"
-	}
-
-	severity := normalizeDiscrepancySeverity(req.Severity)
-	if severity == "" {
-		severity = "medium"
-	}
-
-	lossAmount := req.ExpectedRevenue - req.ActualRevenue
-	if lossAmount < 0 {
-		lossAmount = 0
-	}
-
-	creatorID := strings.TrimSpace(fmt.Sprint(c.Locals("userId")))
-	if creatorID == "<nil>" {
-		creatorID = ""
-	}
-
-	var id string
-	var routeNumber string
-	var createdAt time.Time
-	var updatedAt time.Time
-	err := database.QueryRow(
-		`INSERT INTO discrepancies (route_id, bus_number, transaction_date, expected_revenue, actual_revenue, loss_amount, status, severity, notes, created_by)
-		 VALUES ($1, $2, $3::date, $4, $5, $6, $7, $8, $9, NULLIF($10,'')::uuid)
-		 RETURNING id, created_at, updated_at`,
-		routeID,
-		busNumber,
-		transactionDate,
-		req.ExpectedRevenue,
-		req.ActualRevenue,
-		lossAmount,
-		status,
-		severity,
-		strings.TrimSpace(req.Notes),
-		creatorID,
-	).Scan(&id, &createdAt, &updatedAt)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create discrepancy"})
-	}
-
-	_ = database.QueryRow(`SELECT COALESCE(route_number, '') FROM routes WHERE id = $1`, routeID).Scan(&routeNumber)
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"success": true,
-		"discrepancy": fiber.Map{
-			"id":               id,
-			"route_id":         routeID,
-			"route_number":     routeNumber,
-			"bus_number":       busNumber,
-			"transaction_date": transactionDate,
-			"expected_revenue": req.ExpectedRevenue,
-			"actual_revenue":   req.ActualRevenue,
-			"loss_amount":      lossAmount,
-			"status":           status,
-			"severity":         severity,
-			"notes":            strings.TrimSpace(req.Notes),
-			"created_at":       createdAt,
-			"updated_at":       updatedAt,
-		},
-	})
-}
+// Manual creation of discrepancies via API was removed to keep discrepancies system-generated only.
 
 // GetDiscrepancies retrieves discrepancies with optional filters
 func GetDiscrepancies(c *fiber.Ctx) error {

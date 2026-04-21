@@ -435,17 +435,21 @@ const PurchaseTicketPage = () => {
       ? stopsByRoute[busNumber]
       : allStops;
 
-  const filteredFromStops = activeStopsForRoute.filter((name) => {
-    const query = fromSearchQuery.trim().toLowerCase();
-    if (!query) return true;
-    return name.toLowerCase().startsWith(query);
-  });
+  const filteredFromStops = activeStopsForRoute
+    .filter((name) => name !== toValue) // prevent choosing the same as 'to'
+    .filter((name) => {
+      const query = fromSearchQuery.trim().toLowerCase();
+      if (!query) return true;
+      return name.toLowerCase().startsWith(query);
+    });
 
-  const filteredToStops = activeStopsForRoute.filter((name) => {
-    const query = toSearchQuery.trim().toLowerCase();
-    if (!query) return true;
-    return name.toLowerCase().startsWith(query);
-  });
+  const filteredToStops = activeStopsForRoute
+    .filter((name) => name !== fromValue) // prevent choosing the same as 'from'
+    .filter((name) => {
+      const query = toSearchQuery.trim().toLowerCase();
+      if (!query) return true;
+      return name.toLowerCase().startsWith(query);
+    });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -456,6 +460,17 @@ const PurchaseTicketPage = () => {
     const from = fromValue.trim();
     const to = toValue.trim();
     const amount = Number.parseFloat(amountValue);
+
+    if (from && to && from === to) {
+      dispatch(
+        addNotification({
+          id: `ticket-same-${Date.now()}`,
+          message: "From and to stops must be different",
+          type: "error",
+        })
+      );
+      return;
+    }
 
     const routeStops = stopsDetailsByRoute[route] || [];
     const resolvedFromStop = routeStops.find((s) => s.displayName === from);
@@ -679,6 +694,16 @@ const PurchaseTicketPage = () => {
                       type="button"
                       onMouseDown={(e) => {
                         e.preventDefault();
+                        if (name === toValue) {
+                          dispatch(
+                            addNotification({
+                              id: `ticket-same-${Date.now()}`,
+                              message: "From and to stops must be different",
+                              type: "error",
+                            })
+                          );
+                          return;
+                        }
                         setFromValue(name);
                         setShowFromDropdown(false);
                       }}
@@ -733,6 +758,16 @@ const PurchaseTicketPage = () => {
                       type="button"
                       onMouseDown={(e) => {
                         e.preventDefault();
+                        if (name === fromValue) {
+                          dispatch(
+                            addNotification({
+                              id: `ticket-same-${Date.now()}`,
+                              message: "From and to stops must be different",
+                              type: "error",
+                            })
+                          );
+                          return;
+                        }
                         setToValue(name);
                         setShowToDropdown(false);
                       }}

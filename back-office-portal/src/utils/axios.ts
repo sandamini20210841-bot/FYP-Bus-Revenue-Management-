@@ -4,6 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15000, // 15s timeout to avoid indefinite hanging requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -29,6 +30,8 @@ api.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
+    console.error('API error', error);
+
     if (error.response?.status === 401) {
       const path = window.location.pathname;
 

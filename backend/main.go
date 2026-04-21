@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"database/sql"
 
 	"github.com/busticket/backend/config"
 	"github.com/busticket/backend/database"
@@ -131,7 +132,6 @@ func main() {
 
 	// Discrepancies
 	discrepancies := protected.Group("/discrepancies")
-	discrepancies.Post("", handlers.CreateDiscrepancy)
 	discrepancies.Post("/analyze", handlers.AnalyzeDiscrepancies)
 	discrepancies.Get("", handlers.GetDiscrepancies)
 	discrepancies.Get("/stats", handlers.GetDiscrepancyStats)
@@ -172,6 +172,79 @@ func main() {
 	if port == "" {
 		port = "8000"
 	}
+
+	// Start background scheduled discrepancy analysis every 30 minutes.
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		// Run an initial analysis shortly after startup (non-blocking)
+		go func() {
+			// small delay so app can finish startup tasks
+			time.Sleep(10 * time.Second)
+			log.Println("Running initial scheduled discrepancy analysis")
+			if err := handlers.RunDiscrepancyAnalysisNow(30); err != nil {
+				log.Printf("Initial discrepancy analysis failed: %v", err)
+			}
+		}()
+		for range ticker.C {
+			log.Println("Running scheduled discrepancy analysis")
+			if err := handlers.RunDiscrepancyAnalysisNow(30); err != nil {
+				log.Printf("Scheduled discrepancy analysis failed: %v", err)
+			}
+		}
+	}()
+
+	// Start DB-backed job worker to process per-departure analysis jobs every minute.
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			// Claim a small batch of pending jobs and mark them processing
+			rows, err := database.Query(`UPDATE discrepancy_jobs SET status='processing', updated_at=NOW()
+			WHERE id IN (
+				SELECT id FROM discrepancy_jobs
+				WHERE status='pending' AND scheduled_at <= NOW()
+				ORDER BY scheduled_at ASC
+				FOR UPDATE SKIP LOCKED
+				LIMIT 5
+			)
+			RETURNING id, route_id::text, bus_number, service_date, attempts`)
+			if err != nil {
+				log.Printf("failed to claim discrepancy jobs: %v", err)
+				continue
+			}
+			for rows.Next() {
+				var id string
+				var routeID sql.NullString
+				var busNumber string
+				var serviceDate time.Time
+				var attempts int
+				if scanErr := rows.Scan(&id, &routeID, &busNumber, &serviceDate, &attempts); scanErr != nil {
+					log.Printf("failed to scan job row: %v", scanErr)
+					continue
+				}
+				routeStr := ""
+				if routeID.Valid {
+					routeStr = routeID.String
+				}
+				// Run targeted analysis for this job
+				if runErr := handlers.RunDiscrepancyForBusDate(routeStr, busNumber, serviceDate.Format("2006-01-02")); runErr != nil {
+					log.Printf("job %s failed: %v", id, runErr)
+					// retry with exponential-ish backoff up to 3 attempts
+					if attempts < 3 {
+						backoff := 5 * (attempts + 1) // minutes
+						_, _ = database.Exec(`UPDATE discrepancy_jobs SET status='pending', attempts = attempts + 1, scheduled_at = NOW() + ($1 || ' minutes')::interval, last_error = $2, updated_at = NOW() WHERE id = $3`, fmt.Sprint(backoff), runErr.Error(), id)
+					} else {
+						_, _ = database.Exec(`UPDATE discrepancy_jobs SET status='failed', attempts = attempts + 1, last_error = $1, updated_at = NOW() WHERE id = $2`, runErr.Error(), id)
+					}
+				} else {
+					// success
+					_, _ = database.Exec(`UPDATE discrepancy_jobs SET status='done', attempts = attempts + 1, updated_at = NOW() WHERE id = $1`, id)
+				}
+			}
+			rows.Close()
+		}
+	}()
 
 	log.Printf("🚀 Server starting on port %s", port)
 	if err := app.Listen(fmt.Sprintf(":%s", port)); err != nil {

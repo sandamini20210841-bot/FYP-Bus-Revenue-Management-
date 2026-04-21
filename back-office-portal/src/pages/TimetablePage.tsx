@@ -136,6 +136,11 @@ const TimetablePage: React.FC = () => {
 
   const monthDays = useMemo(() => buildMonthDays(monthCursor), [monthCursor]);
 
+  const savedDatesSetForRoute = useMemo(() => {
+    const rows = timetableRouteId ? routeCalendars[timetableRouteId] || [] : [];
+    return new Set(rows.map((r) => r.date));
+  }, [routeCalendars, timetableRouteId]);
+
   const usedTurns = useMemo(
     () => new Set(draftEntries.map((entry) => Number(entry.turn_number))),
     [draftEntries]
@@ -153,6 +158,15 @@ const TimetablePage: React.FC = () => {
       setTurnToAssign("");
       return;
     }
+
+    // If the currently selected turn is not available anymore (e.g. after adding a turn),
+    // default the selection to the first available turn so subsequent Add actions
+    // don't accidentally reuse the previous turn number.
+    setTurnToAssign((prev) => {
+      const prevNum = Number(prev);
+      if (availableTurns.includes(prevNum)) return prev;
+      return String(availableTurns[0] || "");
+    });
   }, [availableTurns]);
 
   useEffect(() => {
@@ -286,7 +300,56 @@ const TimetablePage: React.FC = () => {
   };
 
   const openTimetableModal = async () => {
-    await openTimetableModalFor(routes[0]?.id || "", formatDate(new Date()));
+    // Open a fresh "Create Timetable" modal without loading previously persisted entries.
+    const initialRouteId = routes[0]?.id || "";
+    const initialDate = formatDate(new Date());
+
+    setTimetableError(null);
+    setTimetableSuccess(null);
+    setDraftEntriesByDate({});
+    setCompleteSavedDates({});
+    setIsTimetableModalOpen(true);
+    setTimetableRouteId(initialRouteId);
+    setSelectedCalendarDate(initialDate);
+    const dateSource = new Date(`${initialDate}T00:00:00`);
+    setMonthCursor(new Date(dateSource.getFullYear(), dateSource.getMonth(), 1));
+
+    // Clear visible entries and assignment inputs so modal starts empty.
+    setPersistedEntries([]);
+    setDraftEntries([]);
+    setTurnToAssign("");
+    setBusToAssign("");
+    setDepartureTimeToAssign("");
+
+    // Load setup and buses so user can configure, but do NOT load existing entries.
+    if (initialRouteId) {
+      try {
+        // Fetch calendar for the route so we can choose the first non-saved date.
+        const [calendarResp] = await Promise.all([
+          api.get("/timetables/calendar", { params: { route_id: initialRouteId } }),
+          // still load setup and buses in parallel
+          loadTimetableSetup(initialRouteId),
+          loadRouteBuses(initialRouteId),
+        ] as const);
+
+        const rows = Array.isArray(calendarResp.data?.dates) ? calendarResp.data.dates : [];
+        const savedSet = new Set(rows.map((r: any) => r.date));
+
+        // Start from today and advance until we find a date without a saved timetable.
+        const cursor = new Date(`${initialDate}T00:00:00`);
+        let attempts = 0;
+        while (savedSet.has(formatDate(cursor)) && attempts < 365) {
+          cursor.setDate(cursor.getDate() + 1);
+          attempts += 1;
+        }
+        const chosen = formatDate(cursor);
+        setSelectedCalendarDate(chosen);
+        setMonthCursor(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
+      } catch {
+        // If fetching calendar fails, still load setup and buses but keep selected date as today.
+        await Promise.all([loadTimetableSetup(initialRouteId), loadRouteBuses(initialRouteId)]);
+      }
+    }
   };
 
   const handleDeleteSavedDate = async (routeId: string, routeNumber: string, date: string) => {
@@ -828,19 +891,22 @@ const TimetablePage: React.FC = () => {
                       const sameMonth = day.getMonth() === monthCursor.getMonth();
                       const dayText = formatDate(day);
                       const selected = dayText === selectedCalendarDate;
-                      const isSavedComplete = !!completeSavedDates[dayText];
+                      const isSavedDate = savedDatesSetForRoute.has(dayText) || !!completeSavedDates[dayText];
                       return (
                         <button
                           key={dayText}
                           type="button"
                           onClick={async () => {
+                            if (isSavedDate) return;
                             setSelectedCalendarDate(dayText);
                             if (timetableRouteId) {
                               await loadTimetableEntries(timetableRouteId, dayText);
                             }
                           }}
+                          disabled={isSavedDate}
+                          title={isSavedDate ? "Timetable already exists for this date" : undefined}
                           className={`h-12 rounded-lg border text-sm ${
-                            isSavedComplete
+                            isSavedDate
                               ? selected
                                 ? "border-emerald-700 bg-emerald-600 text-white"
                                 : "border-emerald-300 bg-emerald-50 text-emerald-700"
@@ -849,7 +915,7 @@ const TimetablePage: React.FC = () => {
                               : sameMonth
                               ? "border-slate-200 bg-white text-slate-700"
                               : "border-slate-100 bg-slate-50 text-slate-400"
-                          }`}
+                          } ${isSavedDate ? "cursor-not-allowed" : ""}`}
                         >
                           {day.getDate()}
                         </button>

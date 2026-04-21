@@ -70,6 +70,26 @@ func ensureTimetableSchema() error {
 		return err
 	}
 
+	// Jobs table for scheduled per-departure discrepancy analysis
+	if _, err := database.Exec(`CREATE TABLE IF NOT EXISTS discrepancy_jobs (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		route_id UUID REFERENCES routes(id) ON DELETE SET NULL,
+		bus_number VARCHAR(50) NOT NULL,
+		service_date DATE NOT NULL,
+		scheduled_at TIMESTAMP NOT NULL,
+		status VARCHAR(20) NOT NULL DEFAULT 'pending',
+		attempts INT NOT NULL DEFAULT 0,
+		last_error TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (route_id, bus_number, service_date)
+	)`); err != nil {
+		return err
+	}
+
+	_, _ = database.Exec(`CREATE INDEX IF NOT EXISTS idx_discrepancy_jobs_scheduled ON discrepancy_jobs(scheduled_at)`)
+	_, _ = database.Exec(`CREATE INDEX IF NOT EXISTS idx_discrepancy_jobs_status ON discrepancy_jobs(status)`)
+
 	return nil
 }
 
@@ -547,6 +567,39 @@ func UpsertTimetableEntry(c *fiber.Ctx) error {
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save timetable entry"})
+	}
+
+	// Schedule (or update) a DB-backed job to run analysis 1 hour after departure_time
+	// Parse the service datetime in server local time, then add 1 hour and store as UTC
+	if dt, pErr := time.ParseInLocation("2006-01-02T15:04:05", fmt.Sprintf("%sT%s:00", dateText, departureTime), time.Local); pErr == nil {
+		scheduledAt := dt.Add(1 * time.Hour).UTC()
+		_, jobErr := database.Exec(`INSERT INTO discrepancy_jobs (route_id, bus_number, service_date, scheduled_at)
+		    VALUES ($1, $2, $3::date, $4)
+		    ON CONFLICT (route_id, bus_number, service_date)
+		    DO UPDATE SET scheduled_at = EXCLUDED.scheduled_at, status = 'pending', attempts = 0, updated_at = NOW()`,
+			routeID,
+			busNumber,
+			dateText,
+			scheduledAt,
+		)
+		if jobErr != nil {
+			log.Printf("failed to enqueue discrepancy job route=%s bus=%s date=%s err=%v", routeID, busNumber, dateText, jobErr)
+		}
+	} else {
+		// fallback: enqueue job for 1 hour from now
+		scheduledAt := time.Now().UTC().Add(1 * time.Hour)
+		_, jobErr := database.Exec(`INSERT INTO discrepancy_jobs (route_id, bus_number, service_date, scheduled_at)
+		    VALUES ($1, $2, $3::date, $4)
+		    ON CONFLICT (route_id, bus_number, service_date)
+		    DO UPDATE SET scheduled_at = EXCLUDED.scheduled_at, status = 'pending', attempts = 0, updated_at = NOW()`,
+			routeID,
+			busNumber,
+			dateText,
+			scheduledAt,
+		)
+		if jobErr != nil {
+			log.Printf("failed to enqueue discrepancy job (fallback) route=%s bus=%s date=%s err=%v", routeID, busNumber, dateText, jobErr)
+		}
 	}
 
 	return c.JSON(fiber.Map{"success": true})
