@@ -58,8 +58,22 @@ func CreateRoute(c *fiber.Ctx) error {
 		})
 	}
 
-	// Insert route into PostgreSQL. created_by is left NULL for now until
-	// authentication is wired and we can associate the route with a user.
+	// Use a DB transaction to avoid partial inserts on retries and to provide
+	// an opportunity to reject duplicate route numbers.
+	tx, err := database.PostgresDB.Begin()
+	if err != nil {
+		log.Printf("failed to start transaction for create route: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create route"})
+	}
+	defer tx.Rollback()
+
+	// Prevent duplicate route numbers (race window still possible without a
+	// unique constraint, but this avoids common duplicate inserts).
+	var existingID string
+	if err := tx.QueryRow(`SELECT id FROM routes WHERE route_number = $1 LIMIT 1`, strings.TrimSpace(req.RouteNumber)).Scan(&existingID); err == nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Route with this number already exists"})
+	}
+
 	var routeID string
 	var latitude sql.NullFloat64
 	var longitude sql.NullFloat64
@@ -69,7 +83,8 @@ func CreateRoute(c *fiber.Ctx) error {
 	if req.Longitude != nil {
 		longitude = sql.NullFloat64{Float64: *req.Longitude, Valid: true}
 	}
-	err := database.QueryRow(
+
+	err = tx.QueryRow(
 		`INSERT INTO routes (route_number, bus_number, description, latitude, longitude)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id`,
@@ -81,13 +96,10 @@ func CreateRoute(c *fiber.Ctx) error {
 	).Scan(&routeID)
 	if err != nil {
 		log.Printf("failed to insert route: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create route",
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create route"})
 	}
 
-	// Insert stops for this route. We keep it simple (no explicit transaction),
-	// but log any insertion errors.
+	// Insert stops for this route inside the same transaction.
 	sequence := 1
 	for _, stop := range req.Stops {
 		name := strings.TrimSpace(stop.Name)
@@ -108,7 +120,7 @@ func CreateRoute(c *fiber.Ctx) error {
 				amount = sql.NullFloat64{Float64: v, Valid: true}
 			}
 		}
-		if _, err := database.Exec(
+		if _, err := tx.Exec(
 			`INSERT INTO stops (route_id, stop_name, sequence_order, distance_km, amount)
 			 VALUES ($1, $2, $3, $4, $5)`,
 			routeID,
@@ -121,6 +133,11 @@ func CreateRoute(c *fiber.Ctx) error {
 			continue
 		}
 		sequence++
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("failed to commit create route tx: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create route"})
 	}
 
 	// TODO: Verify user is bus_owner
@@ -321,15 +338,30 @@ func UpdateRoute(c *fiber.Ctx) error {
 		longitude = sql.NullFloat64{Float64: *req.Longitude, Valid: true}
 	}
 
-	// Update route details
-	_, err := database.Exec(
+	// Use a transaction for update to avoid partial state if insertion fails
+	tx, err := database.PostgresDB.Begin()
+	if err != nil {
+		log.Printf("failed to start transaction for update route %s: %v", routeID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update route"})
+	}
+	defer tx.Rollback()
+
+	// Lock the route row to serialize concurrent updates and prevent duplicate
+	// stop writes while the route is being edited.
+	var exists string
+	if err := tx.QueryRow(`SELECT id FROM routes WHERE id = $1 FOR UPDATE`, routeID).Scan(&exists); err != nil {
+		log.Printf("route %s not found for update: %v", routeID, err)
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Route not found"})
+	}
+
+	if _, err := tx.Exec(
 		`UPDATE routes
 		 SET route_number = $1,
-		     bus_number = $2,
-		     description = $3,
-		     latitude = $4,
-		     longitude = $5,
-		     updated_at = NOW()
+			 bus_number = $2,
+			 description = $3,
+			 latitude = $4,
+			 longitude = $5,
+			 updated_at = NOW()
 		 WHERE id = $6`,
 		strings.TrimSpace(req.RouteNumber),
 		strings.TrimSpace(req.BusNumber),
@@ -337,53 +369,66 @@ func UpdateRoute(c *fiber.Ctx) error {
 		latitude,
 		longitude,
 		routeID,
-	)
-	if err != nil {
+	); err != nil {
 		log.Printf("failed to update route %s: %v", routeID, err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update route",
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update route"})
 	}
 
-	// Replace existing stops
-	if _, err := database.Exec(`DELETE FROM stops WHERE route_id = $1`, routeID); err != nil {
-		log.Printf("failed to delete stops for route %s: %v", routeID, err)
-	}
-
-	sequence := 1
+	validStops := []StopInput{}
 	for _, stop := range req.Stops {
 		name := strings.TrimSpace(stop.Name)
 		if name == "" {
 			continue
 		}
+		validStops = append(validStops, StopInput{
+			Name:     name,
+			Distance: strings.TrimSpace(stop.Distance),
+			Amount:   strings.TrimSpace(stop.Amount),
+		})
+	}
+	if len(validStops) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "At least one valid stop is required"})
+	}
 
+	if _, err := tx.Exec(`DELETE FROM stops WHERE route_id = $1`, routeID); err != nil {
+		log.Printf("failed to delete stops for route %s: %v", routeID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update route stops"})
+	}
+
+	sequence := 1
+	for _, stop := range validStops {
 		var distance sql.NullFloat64
 		var amount sql.NullFloat64
 
-		if d := strings.TrimSpace(stop.Distance); d != "" {
-			if v, err := parseToFloat(d); err == nil {
+		if stop.Distance != "" {
+			if v, err := parseToFloat(stop.Distance); err == nil {
 				distance = sql.NullFloat64{Float64: v, Valid: true}
 			}
 		}
-		if a := strings.TrimSpace(stop.Amount); a != "" {
-			if v, err := parseToFloat(a); err == nil {
+		if stop.Amount != "" {
+			if v, err := parseToFloat(stop.Amount); err == nil {
 				amount = sql.NullFloat64{Float64: v, Valid: true}
 			}
 		}
 
-		if _, err := database.Exec(
+		if _, err := tx.Exec(
 			`INSERT INTO stops (route_id, stop_name, sequence_order, distance_km, amount)
 			 VALUES ($1, $2, $3, $4, $5)`,
 			routeID,
-			name,
+			stop.Name,
 			sequence,
 			distance,
 			amount,
 		); err != nil {
 			log.Printf("failed to insert stop for route %s: %v", routeID, err)
-			continue
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save route stops"})
 		}
 		sequence++
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("failed to commit update route tx %s: %v", routeID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update route"})
 	}
 
 	// TODO: Verify user is bus_owner who created this route
@@ -432,10 +477,19 @@ func DeleteRoute(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
+	// Lock the route row to serialize deletes/updates and avoid race conditions
+	// with concurrent updates that may hold locks on dependent rows.
+	var locked string
+	if err := tx.QueryRow(`SELECT id FROM routes WHERE id = $1 FOR UPDATE`, routeID).Scan(&locked); err != nil {
+		log.Printf("route %s not found for delete: %v", routeID, err)
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Route not found"})
+	}
+
 	// Preserve ticket/transaction history when possible by detaching route links.
 	if _, err := tx.Exec(`UPDATE tickets SET route_id = NULL WHERE route_id = $1`, routeID); err != nil {
 		log.Printf("failed to detach tickets from route %s: %v", routeID, err)
 
+		// If this failed due to NOT NULL constraints, attempt fallback delete.
 		errText := strings.ToLower(err.Error())
 		isRouteIDNotNull := strings.Contains(errText, "route_id") && strings.Contains(errText, "not-null")
 		isNullViolation := strings.Contains(errText, "null value") && strings.Contains(errText, "route_id")
@@ -450,8 +504,9 @@ func DeleteRoute(c *fiber.Ctx) error {
 				})
 			}
 		} else {
+			// Likely a lock/timeout issue; return a retryable conflict to the client.
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": "Route is referenced by ticket records and cannot be deleted right now",
+				"error": "Route is currently locked or the database is busy; please retry shortly",
 			})
 		}
 	}

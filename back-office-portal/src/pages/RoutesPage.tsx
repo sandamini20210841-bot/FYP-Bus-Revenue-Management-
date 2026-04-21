@@ -682,8 +682,25 @@ const RoutesPage: React.FC = () => {
 
       setIsModalOpen(false);
       setEditingRoute(null);
-    } catch {
-      setStopsError("Failed to save route. Please try again.");
+    } catch (error: any) {
+      console.error("Failed to save route", error);
+
+      const backendMessage =
+        (typeof error?.response?.data?.error === "string" &&
+          error.response.data.error.trim()) ||
+        "Failed to save route. Please try again.";
+
+      setStopsError(backendMessage);
+
+      dispatch(
+        addNotification({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          message: backendMessage,
+          type: "error",
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      );
     } finally {
       setIsSavingRoute(false);
     }
