@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/busticket/backend/config"
@@ -13,9 +15,14 @@ import (
 var PostgresDB *sql.DB
 
 func InitPostgres(cfg *config.Config) error {
+	log.Printf("[POSTGRES] Initializing connection")
+	log.Printf("[POSTGRES] DSN: %s", redactPostgresURL(cfg.PostgresURL))
+	log.Printf("[POSTGRES] Target: %s", describePostgresTarget(cfg.PostgresURL))
+
 	var err error
 	PostgresDB, err = sql.Open("postgres", cfg.PostgresURL)
 	if err != nil {
+		log.Printf("[POSTGRES] sql.Open failed: %v", err)
 		return err
 	}
 
@@ -29,11 +36,47 @@ func InitPostgres(cfg *config.Config) error {
 	defer cancel()
 
 	if err := PostgresDB.PingContext(ctx); err != nil {
+		log.Printf("[POSTGRES] Ping failed for %s: %v", describePostgresTarget(cfg.PostgresURL), err)
 		return err
 	}
 
-	log.Println("✅ PostgreSQL connected successfully")
+	log.Printf("[POSTGRES] Connected successfully to %s", describePostgresTarget(cfg.PostgresURL))
 	return nil
+}
+
+func describePostgresTarget(postgresURL string) string {
+	parsed, err := url.Parse(postgresURL)
+	if err != nil {
+		return "unparseable connection string"
+	}
+
+	host := parsed.Host
+	if host == "" {
+		host = "<empty>"
+	}
+
+	dbName := strings.TrimPrefix(parsed.Path, "/")
+	if dbName == "" {
+		dbName = "<empty>"
+	}
+
+	return "host=" + host + " db=" + dbName
+}
+
+func redactPostgresURL(postgresURL string) string {
+	parsed, err := url.Parse(postgresURL)
+	if err != nil {
+		return "<invalid postgres url>"
+	}
+
+	if parsed.User != nil {
+		username := parsed.User.Username()
+		if username != "" {
+			parsed.User = url.UserPassword(username, "***")
+		}
+	}
+
+	return parsed.String()
 }
 
 func ClosePostgres() error {

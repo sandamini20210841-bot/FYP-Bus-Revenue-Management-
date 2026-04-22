@@ -1,11 +1,11 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"time"
-	"database/sql"
 
 	"github.com/busticket/backend/config"
 	"github.com/busticket/backend/database"
@@ -173,21 +173,13 @@ func main() {
 		port = "8000"
 	}
 
-	// Start background scheduled discrepancy analysis every 30 minutes.
+	// Start background scheduled discrepancy analysis every 30 minutes (full system analysis).
+	// Per-departure analysis (10 minutes after each bus departs) is handled by the job worker below.
 	go func() {
 		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()
-		// Run an initial analysis shortly after startup (non-blocking)
-		go func() {
-			// small delay so app can finish startup tasks
-			time.Sleep(10 * time.Second)
-			log.Println("Running initial scheduled discrepancy analysis")
-			if err := handlers.RunDiscrepancyAnalysisNow(30); err != nil {
-				log.Printf("Initial discrepancy analysis failed: %v", err)
-			}
-		}()
 		for range ticker.C {
-			log.Println("Running scheduled discrepancy analysis")
+			log.Println("Running scheduled full-system discrepancy analysis")
 			if err := handlers.RunDiscrepancyAnalysisNow(30); err != nil {
 				log.Printf("Scheduled discrepancy analysis failed: %v", err)
 			}
@@ -199,6 +191,31 @@ func main() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
+			log.Println("[JOB_WORKER] Tick: checking for pending discrepancy jobs...")
+
+			var pendingJobs int
+			if err := database.QueryRow(`SELECT COUNT(*) FROM discrepancy_jobs WHERE status = 'pending'`).Scan(&pendingJobs); err != nil {
+				log.Printf("[JOB_WORKER] ERROR checking pending job count: %v", err)
+				continue
+			}
+
+			var dueJobs int
+			if err := database.QueryRow(`SELECT COUNT(*) FROM discrepancy_jobs WHERE status = 'pending' AND scheduled_at <= NOW()`).Scan(&dueJobs); err != nil {
+				log.Printf("[JOB_WORKER] ERROR checking due job count: %v", err)
+				continue
+			}
+
+			if pendingJobs == 0 {
+				log.Println("[JOB_WORKER] Queue is empty: no pending discrepancy jobs exist")
+			} else {
+				var nextScheduled sql.NullTime
+				if err := database.QueryRow(`SELECT MIN(scheduled_at) FROM discrepancy_jobs WHERE status = 'pending'`).Scan(&nextScheduled); err == nil && nextScheduled.Valid {
+					log.Printf("[JOB_WORKER] Queue status: pending=%d due_now=%d next_due=%s", pendingJobs, dueJobs, nextScheduled.Time.Format("2006-01-02 15:04:05 MST"))
+				} else {
+					log.Printf("[JOB_WORKER] Queue status: pending=%d due_now=%d next_due=<unknown>", pendingJobs, dueJobs)
+				}
+			}
+
 			// Claim a small batch of pending jobs and mark them processing
 			rows, err := database.Query(`UPDATE discrepancy_jobs SET status='processing', updated_at=NOW()
 			WHERE id IN (
@@ -210,39 +227,54 @@ func main() {
 			)
 			RETURNING id, route_id::text, bus_number, service_date, attempts`)
 			if err != nil {
-				log.Printf("failed to claim discrepancy jobs: %v", err)
+				log.Printf("[JOB_WORKER] ERROR claiming jobs: %v", err)
 				continue
 			}
+
+			jobCount := 0
 			for rows.Next() {
+				jobCount++
 				var id string
 				var routeID sql.NullString
 				var busNumber string
 				var serviceDate time.Time
 				var attempts int
 				if scanErr := rows.Scan(&id, &routeID, &busNumber, &serviceDate, &attempts); scanErr != nil {
-					log.Printf("failed to scan job row: %v", scanErr)
+					log.Printf("[JOB_WORKER] ERROR scanning job row: %v", scanErr)
 					continue
 				}
 				routeStr := ""
 				if routeID.Valid {
 					routeStr = routeID.String
 				}
+
+				log.Printf("[JOB_WORKER] Processing job #%d: id=%s, bus=%s, date=%s, route=%s, attempt=%d",
+					jobCount, id, busNumber, serviceDate.Format("2006-01-02"), routeStr, attempts+1)
+
 				// Run targeted analysis for this job
 				if runErr := handlers.RunDiscrepancyForBusDate(routeStr, busNumber, serviceDate.Format("2006-01-02")); runErr != nil {
-					log.Printf("job %s failed: %v", id, runErr)
+					log.Printf("[JOB_WORKER] ❌ Job %s FAILED (attempt %d): %v", id, attempts+1, runErr)
 					// retry with exponential-ish backoff up to 3 attempts
 					if attempts < 3 {
 						backoff := 5 * (attempts + 1) // minutes
+						log.Printf("[JOB_WORKER] Retrying job %s in %d minutes (attempt %d/3)", id, backoff, attempts+2)
 						_, _ = database.Exec(`UPDATE discrepancy_jobs SET status='pending', attempts = attempts + 1, scheduled_at = NOW() + ($1 || ' minutes')::interval, last_error = $2, updated_at = NOW() WHERE id = $3`, fmt.Sprint(backoff), runErr.Error(), id)
 					} else {
+						log.Printf("[JOB_WORKER] ⚠️  Job %s EXHAUSTED (max 3 attempts reached)", id)
 						_, _ = database.Exec(`UPDATE discrepancy_jobs SET status='failed', attempts = attempts + 1, last_error = $1, updated_at = NOW() WHERE id = $2`, runErr.Error(), id)
 					}
 				} else {
-					// success
+					log.Printf("[JOB_WORKER] ✅ Job %s SUCCEEDED", id)
 					_, _ = database.Exec(`UPDATE discrepancy_jobs SET status='done', attempts = attempts + 1, updated_at = NOW() WHERE id = $1`, id)
 				}
 			}
 			rows.Close()
+
+			if jobCount == 0 {
+				log.Println("[JOB_WORKER] No pending jobs found (all on schedule)")
+			} else {
+				log.Printf("[JOB_WORKER] Processed %d job(s)", jobCount)
+			}
 		}
 	}()
 

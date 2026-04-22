@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strings"
@@ -434,6 +435,8 @@ func RunDiscrepancyAnalysisNow(days int) error {
 // RunDiscrepancyForBusDate runs the anomaly check for a single bus and service date.
 // routeID may be empty. serviceDate must be YYYY-MM-DD.
 func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate string) error {
+	log.Printf("[ANALYSIS] Starting per-departure analysis: bus=%s, date=%s, route=%s", busNumber, serviceDate, routeID)
+
 	if strings.TrimSpace(busNumber) == "" {
 		return fmt.Errorf("bus number required")
 	}
@@ -446,6 +449,7 @@ func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate stri
 	startDate := sd.AddDate(0, 0, -365).Format("2006-01-02")
 	endDate := sd.Format("2006-01-02")
 
+	log.Printf("[ANALYSIS] Querying transaction history from %s to %s", startDate, endDate)
 	rows, qErr := database.Query(
 		`SELECT tr.transaction_date::date AS d, COALESCE(SUM(tr.amount),0) AS revenue
 		 FROM transactions tr
@@ -459,6 +463,7 @@ func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate stri
 		busNumber, startDate, endDate,
 	)
 	if qErr != nil {
+		log.Printf("[ANALYSIS] ❌ Query failed: %v", qErr)
 		return qErr
 	}
 	defer rows.Close()
@@ -473,7 +478,9 @@ func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate stri
 		revByDate[d.Format("2006-01-02")] = rev
 	}
 
+	log.Printf("[ANALYSIS] Found %d days of transaction data", len(revByDate))
 	actualDaily := revByDate[sd.Format("2006-01-02")]
+	log.Printf("[ANALYSIS] Actual revenue for %s: %.2f", serviceDate, actualDaily)
 
 	// collect same-weekday historical revenues prior to service date
 	sameWeekday := []float64{}
@@ -494,18 +501,20 @@ func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate stri
 	sort.Slice(sameWeekday, func(i, j int) bool { return true })
 	// We only need up to 8 previous same-weekday values; ensure we have oldest->newest order is not necessary for mean
 	if len(sameWeekday) < 4 {
-		// not enough history to make a call
+		log.Printf("[ANALYSIS] ℹ️  Skipped: insufficient same-weekday history (%d < 4)", len(sameWeekday))
 		return nil
 	}
 
 	expectedDaily := mean(sameWeekday)
 	if expectedDaily <= 0 {
+		log.Printf("[ANALYSIS] ℹ️  Skipped: expected daily revenue is zero or negative")
 		return nil
 	}
 
 	dailyStd := stddev(sameWeekday, expectedDaily)
 	loss := expectedDaily - actualDaily
 	if loss <= 0 {
+		log.Printf("[ANALYSIS] ℹ️  Skipped: no revenue loss detected (loss=%.2f)", loss)
 		return nil
 	}
 	dropPct := (loss / expectedDaily) * 100
@@ -513,6 +522,9 @@ func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate stri
 	if dailyStd > 0 {
 		zScore = (actualDaily - expectedDaily) / dailyStd
 	}
+
+	log.Printf("[ANALYSIS] Daily check: expected=%.2f, actual=%.2f, loss=%.2f (%.1f%%), zscore=%.2f",
+		expectedDaily, actualDaily, loss, dropPct, zScore)
 
 	// weekly and monthly totals
 	weeklyTotals := map[string]float64{}
@@ -553,9 +565,16 @@ func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate stri
 	weeklyWeak := expectedWeekly <= 0 || actualWeekly <= expectedWeekly*0.85
 	monthlyWeak := expectedMonthly <= 0 || actualMonthly <= expectedMonthly*0.90
 	isAnomaly := (dropPct >= 20 && loss >= 2000 && weeklyWeak && monthlyWeak) || (zScore <= -2.5 && loss >= 2000)
+
+	log.Printf("[ANALYSIS] Weekly check: expected=%.2f, actual=%.2f, weak=%v", expectedWeekly, actualWeekly, weeklyWeak)
+	log.Printf("[ANALYSIS] Monthly check: expected=%.2f, actual=%.2f, weak=%v", expectedMonthly, actualMonthly, monthlyWeak)
+
 	if !isAnomaly {
+		log.Printf("[ANALYSIS] ℹ️  Skipped: not flagged as anomaly (conditions not met)")
 		return nil
 	}
+
+	log.Printf("[ANALYSIS] 🚨 ANOMALY DETECTED: severity will be determined from loss amount")
 
 	severity := severityFromLoss(dropPct, loss)
 	anomalyScore := math.Abs(zScore)
@@ -569,8 +588,14 @@ func RunDiscrepancyForBusDate(routeID string, busNumber string, serviceDate stri
 		routeNull = sql.NullString{String: routeID, Valid: true}
 	}
 
+	log.Printf("[ANALYSIS] Upserting discrepancy: severity=%s, anomaly_score=%.4f, loss=%.2f", severity, anomalyScore, loss)
 	_, _, upErr := upsertSystemDiscrepancy(routeNull, busNumber, sd, expectedDaily, expectedWeekly, expectedMonthly, actualDaily, actualWeekly, actualMonthly, loss, anomalyScore, severity, notes)
-	return upErr
+	if upErr != nil {
+		log.Printf("[ANALYSIS] ❌ Upsert failed: %v", upErr)
+		return upErr
+	}
+	log.Printf("[ANALYSIS] ✅ Discrepancy upserted successfully")
+	return nil
 }
 
 func normalizeDiscrepancyStatus(value string) string {

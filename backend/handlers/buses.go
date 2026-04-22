@@ -16,15 +16,15 @@ import (
 )
 
 type busRecord struct {
-	id         string
-	routeID    string
-	routeNum   string
-	busNumber  string
-	ownerID    sql.NullString
-	ownerName  sql.NullString
-	createdBy  sql.NullString
-	createdAt  time.Time
-	updatedAt  time.Time
+	id        string
+	routeID   string
+	routeNum  string
+	busNumber string
+	ownerID   sql.NullString
+	ownerName sql.NullString
+	createdBy sql.NullString
+	createdAt time.Time
+	updatedAt time.Time
 }
 
 func discrepancyScheduleLocation() *time.Location {
@@ -177,14 +177,14 @@ func GetBuses(c *fiber.Ctx) error {
 			continue
 		}
 		buses = append(buses, fiber.Map{
-			"id": b.id,
-			"route_id": b.routeID,
-			"route_number": b.routeNum,
-			"bus_number": b.busNumber,
+			"id":            b.id,
+			"route_id":      b.routeID,
+			"route_number":  b.routeNum,
+			"bus_number":    b.busNumber,
 			"owner_user_id": b.ownerID.String,
-			"owner_name": b.ownerName.String,
-			"created_at": b.createdAt,
-			"updated_at": b.updatedAt,
+			"owner_name":    b.ownerName.String,
+			"created_at":    b.createdAt,
+			"updated_at":    b.updatedAt,
 		})
 	}
 
@@ -424,13 +424,13 @@ func GetRouteDepartures(c *fiber.Ctx) error {
 			}
 
 			departures = append(departures, fiber.Map{
-				"route_id": routeID,
-				"route_number": routeNumber,
-				"date": depDate.Format("2006-01-02"),
-				"turn_number": turn,
+				"route_id":       routeID,
+				"route_number":   routeNumber,
+				"date":           depDate.Format("2006-01-02"),
+				"turn_number":    turn,
 				"departure_time": departureTime,
-				"bus_number": busNo,
-				"bus_owner": ownerByBus[strings.TrimSpace(busNo)],
+				"bus_number":     busNo,
+				"bus_owner":      ownerByBus[strings.TrimSpace(busNo)],
 			})
 		}
 
@@ -592,6 +592,9 @@ func UpsertTimetableEntry(c *fiber.Ctx) error {
 	loc := discrepancyScheduleLocation()
 	if dt, pErr := time.ParseInLocation("2006-01-02T15:04:05", fmt.Sprintf("%sT%s:00", dateText, departureTime), loc); pErr == nil {
 		scheduledAt := dt.Add(10 * time.Minute).UTC()
+		log.Printf("[TIMETABLE] Enqueueing discrepancy job: bus=%s, date=%s, route=%s, departure=%s, analysis_scheduled_for=%s",
+			busNumber, dateText, routeID, departureTime, scheduledAt.Format("2006-01-02 15:04:05 MST"))
+
 		_, jobErr := database.Exec(`INSERT INTO discrepancy_jobs (route_id, bus_number, service_date, scheduled_at)
 		    VALUES ($1, $2, $3::date, $4)
 		    ON CONFLICT (route_id, bus_number, service_date)
@@ -602,11 +605,16 @@ func UpsertTimetableEntry(c *fiber.Ctx) error {
 			scheduledAt,
 		)
 		if jobErr != nil {
-			log.Printf("failed to enqueue discrepancy job route=%s bus=%s date=%s err=%v", routeID, busNumber, dateText, jobErr)
+			log.Printf("[TIMETABLE] ❌ Failed to enqueue job: route=%s bus=%s date=%s err=%v", routeID, busNumber, dateText, jobErr)
+		} else {
+			log.Printf("[TIMETABLE] ✅ Job queued successfully")
 		}
 	} else {
 		// fallback: enqueue job for 10 minutes from now
 		scheduledAt := time.Now().UTC().Add(10 * time.Minute)
+		log.Printf("[TIMETABLE] ⚠️  Fallback enqueue (parse failed): bus=%s, date=%s, route=%s, analysis_scheduled_for=%s (parse_err=%v)",
+			busNumber, dateText, routeID, scheduledAt.Format("2006-01-02 15:04:05 MST"), pErr)
+
 		_, jobErr := database.Exec(`INSERT INTO discrepancy_jobs (route_id, bus_number, service_date, scheduled_at)
 		    VALUES ($1, $2, $3::date, $4)
 		    ON CONFLICT (route_id, bus_number, service_date)
@@ -617,7 +625,9 @@ func UpsertTimetableEntry(c *fiber.Ctx) error {
 			scheduledAt,
 		)
 		if jobErr != nil {
-			log.Printf("failed to enqueue discrepancy job (fallback) route=%s bus=%s date=%s err=%v", routeID, busNumber, dateText, jobErr)
+			log.Printf("[TIMETABLE] ❌ Failed to enqueue job (fallback): route=%s bus=%s date=%s err=%v", routeID, busNumber, dateText, jobErr)
+		} else {
+			log.Printf("[TIMETABLE] ✅ Job queued successfully (fallback)")
 		}
 	}
 
@@ -747,9 +757,9 @@ func GetTimetableEntries(c *fiber.Ctx) error {
 			continue
 		}
 		entries = append(entries, fiber.Map{
-			"turn_number": turn,
-			"bus_number": busNo,
-			"bus_owner": owner,
+			"turn_number":    turn,
+			"bus_number":     busNo,
+			"bus_owner":      owner,
 			"departure_time": departureTime,
 		})
 	}
