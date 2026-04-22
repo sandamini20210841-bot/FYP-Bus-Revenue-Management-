@@ -6,13 +6,26 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/busticket/backend/database"
 	"github.com/gofiber/fiber/v2"
 )
 
+var discrepanciesSchemaState struct {
+	mu    sync.Mutex
+	ready bool
+}
+
 func ensureDiscrepanciesSchema() error {
+	discrepanciesSchemaState.mu.Lock()
+	defer discrepanciesSchemaState.mu.Unlock()
+
+	if discrepanciesSchemaState.ready {
+		return nil
+	}
+
 	if _, err := database.Exec(`CREATE TABLE IF NOT EXISTS discrepancies (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		route_id UUID REFERENCES routes(id) ON DELETE SET NULL,
@@ -72,6 +85,8 @@ func ensureDiscrepanciesSchema() error {
 	_, _ = database.Exec(`CREATE INDEX IF NOT EXISTS idx_discrepancies_transaction_date ON discrepancies(transaction_date)`)
 	_, _ = database.Exec(`CREATE INDEX IF NOT EXISTS idx_discrepancies_status ON discrepancies(status)`)
 	_, _ = database.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_discrepancies_bus_date ON discrepancies(bus_number, transaction_date)`)
+
+	discrepanciesSchemaState.ready = true
 
 	return nil
 }

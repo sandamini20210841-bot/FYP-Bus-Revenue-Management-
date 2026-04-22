@@ -78,7 +78,6 @@ const DiscrepanciesPage: React.FC = () => {
   const [items, setItems] = useState<DiscrepancyItem[]>([]);
   const [stats, setStats] = useState<DiscrepancyStats>({ totalDiscrepancies: 0, totalLoss: 0 });
   const [isLoading, setIsLoading] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -103,10 +102,9 @@ const DiscrepanciesPage: React.FC = () => {
       };
 
       
-
       const [statsResponse, listResponse] = await Promise.all([
-        api.get("/discrepancies/stats"),
-        api.get("/discrepancies", { params }),
+        api.get("/discrepancies/stats", { timeout: 60000 }),
+        api.get("/discrepancies", { params, timeout: 60000 }),
       ]);
 
       
@@ -157,23 +155,6 @@ const DiscrepanciesPage: React.FC = () => {
       setIsLoading(false);
     }
   }, [selectedDate, severityFilter, statusFilter]);
-
-  const runAnalysis = useCallback(async () => {
-    setIsAnalyzing(true);
-    try {
-      await api.post("/discrepancies/analyze", null, { params: { days: 90 } });
-    } catch {
-      // continue to load whatever data is already available
-    } finally {
-      setIsAnalyzing(false);
-    }
-  }, []);
-  useEffect(() => {
-    const run = async () => {
-      await loadData();
-    };
-    void run();
-  }, [loadData, runAnalysis]);
 
   useEffect(() => {
     void loadData();
@@ -265,17 +246,6 @@ const DiscrepanciesPage: React.FC = () => {
       return true;
     });
   }, [items, searchQuery, statusFilter, severityFilter, selectedDate]);
-
-  
-
-  const updateStatus = async (id: string, status: DiscrepancyStatus, notes: string) => {
-    try {
-      await api.put(`/discrepancies/${id}/status`, { status, notes });
-      await loadData();
-    } catch {
-      setError("Failed to update discrepancy status.");
-    }
-  };
 
   return (
     <div className="space-y-6 text-sm">
