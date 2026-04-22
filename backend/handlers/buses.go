@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,19 @@ type busRecord struct {
 	createdBy  sql.NullString
 	createdAt  time.Time
 	updatedAt  time.Time
+}
+
+func discrepancyScheduleLocation() *time.Location {
+	tz := strings.TrimSpace(os.Getenv("DISCREPANCY_TIMEZONE"))
+	if tz == "" {
+		tz = "Asia/Colombo"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		log.Printf("invalid DISCREPANCY_TIMEZONE=%q, falling back to UTC: %v", tz, err)
+		return time.UTC
+	}
+	return loc
 }
 
 func ensureBusesSchema() {
@@ -76,7 +90,7 @@ func ensureTimetableSchema() error {
 		route_id UUID REFERENCES routes(id) ON DELETE SET NULL,
 		bus_number VARCHAR(50) NOT NULL,
 		service_date DATE NOT NULL,
-		scheduled_at TIMESTAMP NOT NULL,
+		scheduled_at TIMESTAMPTZ NOT NULL,
 		status VARCHAR(20) NOT NULL DEFAULT 'pending',
 		attempts INT NOT NULL DEFAULT 0,
 		last_error TEXT,
@@ -86,6 +100,10 @@ func ensureTimetableSchema() error {
 	)`); err != nil {
 		return err
 	}
+	// Backward-compatible migration for existing deployments that used TIMESTAMP (no timezone).
+	_, _ = database.Exec(`ALTER TABLE discrepancy_jobs
+		ALTER COLUMN scheduled_at TYPE TIMESTAMPTZ
+		USING (scheduled_at AT TIME ZONE 'UTC')`)
 
 	_, _ = database.Exec(`CREATE INDEX IF NOT EXISTS idx_discrepancy_jobs_scheduled ON discrepancy_jobs(scheduled_at)`)
 	_, _ = database.Exec(`CREATE INDEX IF NOT EXISTS idx_discrepancy_jobs_status ON discrepancy_jobs(status)`)
@@ -569,10 +587,11 @@ func UpsertTimetableEntry(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save timetable entry"})
 	}
 
-	// Schedule (or update) a DB-backed job to run analysis 1 hour after departure_time
-	// Parse the service datetime in server local time, then add 1 hour and store as UTC
-	if dt, pErr := time.ParseInLocation("2006-01-02T15:04:05", fmt.Sprintf("%sT%s:00", dateText, departureTime), time.Local); pErr == nil {
-		scheduledAt := dt.Add(1 * time.Hour).UTC()
+	// Schedule (or update) a DB-backed job to run analysis 10 minutes after departure_time
+	// Parse the service datetime in the configured operations timezone, then add 10 minutes and store in UTC.
+	loc := discrepancyScheduleLocation()
+	if dt, pErr := time.ParseInLocation("2006-01-02T15:04:05", fmt.Sprintf("%sT%s:00", dateText, departureTime), loc); pErr == nil {
+		scheduledAt := dt.Add(10 * time.Minute).UTC()
 		_, jobErr := database.Exec(`INSERT INTO discrepancy_jobs (route_id, bus_number, service_date, scheduled_at)
 		    VALUES ($1, $2, $3::date, $4)
 		    ON CONFLICT (route_id, bus_number, service_date)
@@ -586,8 +605,8 @@ func UpsertTimetableEntry(c *fiber.Ctx) error {
 			log.Printf("failed to enqueue discrepancy job route=%s bus=%s date=%s err=%v", routeID, busNumber, dateText, jobErr)
 		}
 	} else {
-		// fallback: enqueue job for 1 hour from now
-		scheduledAt := time.Now().UTC().Add(1 * time.Hour)
+		// fallback: enqueue job for 10 minutes from now
+		scheduledAt := time.Now().UTC().Add(10 * time.Minute)
 		_, jobErr := database.Exec(`INSERT INTO discrepancy_jobs (route_id, bus_number, service_date, scheduled_at)
 		    VALUES ($1, $2, $3::date, $4)
 		    ON CONFLICT (route_id, bus_number, service_date)
@@ -798,4 +817,3 @@ func nullableString(v string) interface{} {
 	}
 	return trimmed
 }
-
