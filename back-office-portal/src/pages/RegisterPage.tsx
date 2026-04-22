@@ -152,7 +152,7 @@ const RegisterPage = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 pr-10 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
-                  placeholder="••••••••"
+                  placeholder="********"
                 />
                 <button
                   type="button"
@@ -192,13 +192,16 @@ const RegisterPage = () => {
                   )}
                 </button>
               </div>
+              <label className="block text-sm font-medium text-slate-200 mb-1 mt-3">
+                Confirm password <span className="text-red-500">*</span>
+              </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
-                placeholder="••••••••"
+                placeholder="********"
               />
             </div>
           </div>
