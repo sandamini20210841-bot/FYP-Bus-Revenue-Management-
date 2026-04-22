@@ -758,7 +758,9 @@ const RoutesPage: React.FC = () => {
     setIsSavingRoute(true);
     try {
       if (editingRoute && editingRoute.backendId) {
-        await api.put(`/routes/${editingRoute.backendId}`, payload);
+        await api.put(`/routes/${editingRoute.backendId}`, payload, {
+          timeout: 60000,
+        });
 
         setRoutes((prev) =>
           prev.map((r) =>
@@ -838,10 +840,19 @@ const RoutesPage: React.FC = () => {
     } catch (error: any) {
       console.error("Failed to save route", error);
 
+      const backendMessageFromApi =
+        typeof error?.response?.data?.error === "string"
+          ? error.response.data.error.trim()
+          : "";
+      const isTimedOut = error?.code === "ECONNABORTED";
+      const isCanceled = error?.code === "ERR_CANCELED";
       const backendMessage =
-        (typeof error?.response?.data?.error === "string" &&
-          error.response.data.error.trim()) ||
-        "Failed to save route. Please try again.";
+        backendMessageFromApi ||
+        (isTimedOut
+          ? "Save request timed out. Please retry in a few seconds."
+          : isCanceled
+          ? "Save request was canceled before the server responded. Please retry."
+          : "Failed to save route. Please try again.");
 
       setStopsError(backendMessage);
 

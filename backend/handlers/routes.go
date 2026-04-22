@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,12 @@ type RouteResponse struct {
 	Longitude   *float64       `json:"longitude,omitempty"`
 	Stops       []StopResponse `json:"stops"`
 	StopsCount  int            `json:"stops_count"`
+}
+
+type comparableStop struct {
+	Name     string
+	Distance sql.NullFloat64
+	Amount   sql.NullFloat64
 }
 
 func loadStopsForRoute(routeID string) ([]StopResponse, error) {
@@ -456,10 +463,21 @@ func UpdateRoute(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
+	// Avoid waiting indefinitely when another request holds a lock for this route.
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '4s'`); err != nil {
+		log.Printf("failed to set lock timeout for route update %s: %v", routeID, err)
+	}
+
 	// Lock the route row to serialize concurrent updates and prevent duplicate
 	// stop writes while the route is being edited.
 	var exists string
-	if err := tx.QueryRow(`SELECT id FROM routes WHERE id = $1 FOR UPDATE`, routeID).Scan(&exists); err != nil {
+	if err := tx.QueryRow(`SELECT id FROM routes WHERE id = $1 FOR UPDATE NOWAIT`, routeID).Scan(&exists); err != nil {
+		errText := strings.ToLower(err.Error())
+		if strings.Contains(errText, "could not obtain lock on row") || strings.Contains(errText, "lock timeout") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error": "Route is being updated by another request. Please retry in a few seconds.",
+			})
+		}
 		log.Printf("route %s not found for update: %v", routeID, err)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Route not found"})
 	}
@@ -500,40 +518,74 @@ func UpdateRoute(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "At least one valid stop is required"})
 	}
 
-	if _, err := tx.Exec(`DELETE FROM stops WHERE route_id = $1`, routeID); err != nil {
-		log.Printf("failed to delete stops for route %s: %v", routeID, err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update route stops"})
+	incomingStops := make([]comparableStop, 0, len(validStops))
+	for _, stop := range validStops {
+		incomingStops = append(incomingStops, comparableStop{
+			Name:     stop.Name,
+			Distance: parseNullableFloat(stop.Distance),
+			Amount:   parseNullableFloat(stop.Amount),
+		})
 	}
 
-	sequence := 1
-	for _, stop := range validStops {
+	existingStops := make([]comparableStop, 0, len(validStops))
+	existingRows, queryErr := tx.Query(
+		`SELECT stop_name, distance_km, amount
+		 FROM stops
+		 WHERE route_id = $1
+		 ORDER BY sequence_order ASC`,
+		routeID,
+	)
+	if queryErr != nil {
+		log.Printf("failed to query existing stops for route %s: %v", routeID, queryErr)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to load route stops"})
+	}
+	defer existingRows.Close()
+
+	for existingRows.Next() {
+		var name string
 		var distance sql.NullFloat64
 		var amount sql.NullFloat64
+		if scanErr := existingRows.Scan(&name, &distance, &amount); scanErr != nil {
+			log.Printf("failed to scan existing stop for route %s: %v", routeID, scanErr)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to load route stops"})
+		}
+		existingStops = append(existingStops, comparableStop{
+			Name:     strings.TrimSpace(name),
+			Distance: distance,
+			Amount:   amount,
+		})
+	}
+	if rowsErr := existingRows.Err(); rowsErr != nil {
+		log.Printf("failed while reading existing stops for route %s: %v", routeID, rowsErr)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to load route stops"})
+	}
 
-		if stop.Distance != "" {
-			if v, err := parseToFloat(stop.Distance); err == nil {
-				distance = sql.NullFloat64{Float64: v, Valid: true}
-			}
-		}
-		if stop.Amount != "" {
-			if v, err := parseToFloat(stop.Amount); err == nil {
-				amount = sql.NullFloat64{Float64: v, Valid: true}
-			}
+	// Avoid expensive stop rewrites (and ticket FK cascades) when stops did not change.
+	if !stopsEqual(existingStops, incomingStops) {
+		if _, err := tx.Exec(`DELETE FROM stops WHERE route_id = $1`, routeID); err != nil {
+			log.Printf("failed to delete stops for route %s: %v", routeID, err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update route stops"})
 		}
 
-		if _, err := tx.Exec(
-			`INSERT INTO stops (route_id, stop_name, sequence_order, distance_km, amount)
-			 VALUES ($1, $2, $3, $4, $5)`,
-			routeID,
-			stop.Name,
-			sequence,
-			distance,
-			amount,
-		); err != nil {
-			log.Printf("failed to insert stop for route %s: %v", routeID, err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save route stops"})
+		sequence := 1
+		for _, stop := range validStops {
+			distance := parseNullableFloat(stop.Distance)
+			amount := parseNullableFloat(stop.Amount)
+
+			if _, err := tx.Exec(
+				`INSERT INTO stops (route_id, stop_name, sequence_order, distance_km, amount)
+				 VALUES ($1, $2, $3, $4, $5)`,
+				routeID,
+				stop.Name,
+				sequence,
+				distance,
+				amount,
+			); err != nil {
+				log.Printf("failed to insert stop for route %s: %v", routeID, err)
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save route stops"})
+			}
+			sequence++
 		}
-		sequence++
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -561,6 +613,47 @@ func UpdateRoute(c *fiber.Ctx) error {
 // parseToFloat converts a numeric string to float64, ignoring errors by caller.
 func parseToFloat(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
+}
+
+func parseNullableFloat(s string) sql.NullFloat64 {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return sql.NullFloat64{}
+	}
+	if v, err := parseToFloat(trimmed); err == nil {
+		return sql.NullFloat64{Float64: v, Valid: true}
+	}
+	return sql.NullFloat64{}
+}
+
+func nullFloatEqual(a sql.NullFloat64, b sql.NullFloat64) bool {
+	if a.Valid != b.Valid {
+		return false
+	}
+	if !a.Valid {
+		return true
+	}
+	return math.Abs(a.Float64-b.Float64) < 0.000001
+}
+
+func stopsEqual(existing []comparableStop, incoming []comparableStop) bool {
+	if len(existing) != len(incoming) {
+		return false
+	}
+
+	for i := 0; i < len(existing); i++ {
+		if existing[i].Name != incoming[i].Name {
+			return false
+		}
+		if !nullFloatEqual(existing[i].Distance, incoming[i].Distance) {
+			return false
+		}
+		if !nullFloatEqual(existing[i].Amount, incoming[i].Amount) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // DeleteRoute deletes a route
