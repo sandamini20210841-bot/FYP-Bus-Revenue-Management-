@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import api from "../utils/axios";
 
 type RouteSummary = {
@@ -63,7 +62,6 @@ const buildMonthDays = (monthCursor: Date): Date[] => {
 };
 
 const TimetablePage: React.FC = () => {
-  const { t } = useTranslation();
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,14 +172,30 @@ const TimetablePage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await api.get("/routes", { params: { page: 1, limit: 500 } });
-        const rows = Array.isArray(response.data?.routes) ? response.data.routes : [];
-        const mapped: RouteSummary[] = rows
-          .map((row: any) => ({
-            id: row.id || "",
-            routeNumber: row.route_number || "",
-          }))
-          .filter((r: RouteSummary) => r.id && r.routeNumber);
+        const mapped: RouteSummary[] = [];
+        const pageSize = 100;
+        let page = 1;
+
+        while (true) {
+          const response = await api.get("/routes", {
+            params: { page, limit: pageSize, include_stops: false },
+          });
+          const rows = Array.isArray(response.data?.routes) ? response.data.routes : [];
+          if (!rows.length) break;
+
+          mapped.push(
+            ...rows
+              .map((row: any) => ({
+                id: row.id || "",
+                routeNumber: row.route_number || "",
+              }))
+              .filter((r: RouteSummary) => r.id && r.routeNumber)
+          );
+
+          if (rows.length < pageSize) break;
+          page += 1;
+        }
+
         setRoutes(mapped);
         const calendarRequests = mapped.map((route) =>
           api

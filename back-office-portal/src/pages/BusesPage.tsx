@@ -73,11 +73,30 @@ const BusesPage: React.FC = () => {
 
   const loadRoutes = async () => {
     try {
-      const response = await api.get("/routes", { params: { page: 1, limit: 500 } });
-      const rows = Array.isArray(response.data?.routes) ? response.data.routes : [];
-      const mapped = rows
-        .map((r: any) => ({ id: String(r.id || ""), route_number: String(r.route_number || "") }))
-        .filter((r: RouteOption) => r.id && r.route_number);
+      const mapped: RouteOption[] = [];
+      const pageSize = 100;
+      let page = 1;
+
+      while (true) {
+        const response = await api.get("/routes", {
+          params: { page, limit: pageSize, include_stops: false },
+        });
+        const rows = Array.isArray(response.data?.routes) ? response.data.routes : [];
+        if (!rows.length) break;
+
+        mapped.push(
+          ...rows
+            .map((r: any) => ({
+              id: String(r.id || ""),
+              route_number: String(r.route_number || ""),
+            }))
+            .filter((r: RouteOption) => r.id && r.route_number)
+        );
+
+        if (rows.length < pageSize) break;
+        page += 1;
+      }
+
       setRoutes(mapped);
       if (!routeId && mapped.length > 0) {
         setRouteId(mapped[0].id);

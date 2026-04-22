@@ -24,6 +24,9 @@ interface RouteDefinition {
   latitude?: number;
   longitude?: number;
   stops: RouteStop[];
+  stopsCount?: number;
+  stopsLoaded?: boolean;
+  isLoadingStops?: boolean;
 }
 
 interface RouteSectionForm {
@@ -43,6 +46,7 @@ const DEFAULT_ROUTE_COORDINATES = {
   lat: 6.9271,
   lon: 79.8612,
 };
+const ROUTES_PAGE_SIZE = 20;
 
 const splitStopHierarchy = (stopName: string) => {
   const value = stopName.trim();
@@ -115,6 +119,45 @@ const createEmptySection = (id: number): RouteSectionForm => ({
   stops: [createEmptyStop(1)],
 });
 
+const mapBackendStops = (rawStops: any[]): RouteStop[] =>
+  rawStops.map((s: any, stopIndex: number) => {
+    if (typeof s === "string") {
+      return {
+        id: stopIndex + 1,
+        name: s,
+        distance: "",
+        amount: "",
+        amountError: null,
+        distanceError: null,
+      };
+    }
+
+    const distanceValue =
+      typeof s?.distance_km === "number"
+        ? String(s.distance_km)
+        : typeof s?.distance === "number"
+        ? String(s.distance)
+        : typeof s?.distance === "string"
+        ? s.distance
+        : "";
+
+    const amountValue =
+      typeof s?.amount === "number"
+        ? String(s.amount)
+        : typeof s?.amount === "string"
+        ? s.amount
+        : "";
+
+    return {
+      id: stopIndex + 1,
+      name: s?.name || "",
+      distance: distanceValue,
+      amount: amountValue,
+      amountError: null,
+      distanceError: null,
+    };
+  });
+
 const RoutesPage: React.FC = () => {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
@@ -145,6 +188,66 @@ const RoutesPage: React.FC = () => {
   const [isSavingRoute, setIsSavingRoute] = useState(false);
   const [isDeletingRoute, setIsDeletingRoute] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const hydrateRouteStops = async (route: RouteDefinition): Promise<RouteDefinition> => {
+    if (route.stopsLoaded || !route.backendId) {
+      return route;
+    }
+
+    setRoutes((prev) =>
+      prev.map((r) =>
+        r.id === route.id ? { ...r, isLoadingStops: true } : r
+      )
+    );
+
+    try {
+      const response = await api.get(`/routes/${route.backendId}`);
+      const backendRoute = (response.data as any)?.route || {};
+      const rawStops = Array.isArray(backendRoute?.stops) ? backendRoute.stops : [];
+      const mappedStops = mapBackendStops(rawStops);
+      const stopsCount =
+        typeof backendRoute?.stops_count === "number"
+          ? backendRoute.stops_count
+          : mappedStops.length;
+
+      const hydratedRoute: RouteDefinition = {
+        ...route,
+        routeNumber:
+          backendRoute?.route_number && typeof backendRoute.route_number === "string"
+            ? backendRoute.route_number
+            : route.routeNumber,
+        routeName:
+          backendRoute?.description && typeof backendRoute.description === "string"
+            ? backendRoute.description
+            : route.routeName,
+        latitude:
+          typeof backendRoute?.latitude === "number"
+            ? backendRoute.latitude
+            : route.latitude,
+        longitude:
+          typeof backendRoute?.longitude === "number"
+            ? backendRoute.longitude
+            : route.longitude,
+        stops: mappedStops,
+        stopsCount,
+        stopsLoaded: true,
+        isLoadingStops: false,
+      };
+
+      setRoutes((prev) =>
+        prev.map((r) => (r.id === route.id ? hydratedRoute : r))
+      );
+
+      return hydratedRoute;
+    } catch {
+      setRoutes((prev) =>
+        prev.map((r) =>
+          r.id === route.id ? { ...r, isLoadingStops: false } : r
+        )
+      );
+      throw new Error("Failed to load route stops");
+    }
+  };
 
   const handleAddSection = () => {
     setSections((prev) => [
@@ -390,20 +493,38 @@ const RoutesPage: React.FC = () => {
     setEditingRoute(null);
   };
 
-  const handleEditRoute = (route: RouteDefinition) => {
+  const handleEditRoute = async (route: RouteDefinition) => {
     if (!canEditRoutes) return;
 
-    setEditingRoute(route);
-    setRouteNumber(route.routeNumber);
+    let routeToEdit = route;
+    if (!route.stopsLoaded && route.backendId) {
+      try {
+        routeToEdit = await hydrateRouteStops(route);
+      } catch {
+        dispatch(
+          addNotification({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            message: "Failed to load route stops. Please try again.",
+            type: "error",
+            timestamp: new Date().toISOString(),
+            read: false,
+          })
+        );
+        return;
+      }
+    }
+
+    setEditingRoute(routeToEdit);
+    setRouteNumber(routeToEdit.routeNumber);
     setRouteNumberError(null);
-    setRouteName(route.routeName);
+    setRouteName(routeToEdit.routeName);
     setRouteNameError(null);
     setRouteCoordinates({
-      lat: route.latitude ?? DEFAULT_ROUTE_COORDINATES.lat,
-      lon: route.longitude ?? DEFAULT_ROUTE_COORDINATES.lon,
+      lat: routeToEdit.latitude ?? DEFAULT_ROUTE_COORDINATES.lat,
+      lon: routeToEdit.longitude ?? DEFAULT_ROUTE_COORDINATES.lon,
     });
     setStopsError(null);
-    const grouped = groupStopsBySection(route.stops);
+    const grouped = groupStopsBySection(routeToEdit.stops);
     const mappedSections = grouped.map((section, index) => {
       const parsedSectionStops: RouteStop[] = [];
 
@@ -469,10 +590,19 @@ const RoutesPage: React.FC = () => {
         })
       );
     } catch (error: any) {
+      const backendMessageFromApi =
+        typeof error?.response?.data?.error === "string"
+          ? error.response.data.error.trim()
+          : "";
+      const isTimedOut = error?.code === "ECONNABORTED";
+      const isCanceled = error?.code === "ERR_CANCELED";
       const backendMessage =
-        (typeof error?.response?.data?.error === "string" &&
-          error.response.data.error.trim()) ||
-        "Failed to delete route. Please try again.";
+        backendMessageFromApi ||
+        (isTimedOut
+          ? "Delete request timed out. This route may have many linked records; please retry."
+          : isCanceled
+          ? "Delete request was canceled before the server responded. Please retry."
+          : "Failed to delete route. Please try again.");
 
       dispatch(
         addNotification({
@@ -489,12 +619,29 @@ const RoutesPage: React.FC = () => {
     }
   };
 
-  const toggleRouteExpanded = (routeId: number) => {
-    setExpandedRouteIds((prev) =>
-      prev.includes(routeId)
-        ? prev.filter((id) => id !== routeId)
-        : [...prev, routeId]
-    );
+  const toggleRouteExpanded = async (route: RouteDefinition) => {
+    const isExpanded = expandedRouteIds.includes(route.id);
+    if (isExpanded) {
+      setExpandedRouteIds((prev) => prev.filter((id) => id !== route.id));
+      return;
+    }
+
+    setExpandedRouteIds((prev) => [...prev, route.id]);
+    if (!route.stopsLoaded && route.backendId && !route.isLoadingStops) {
+      try {
+        await hydrateRouteStops(route);
+      } catch {
+        dispatch(
+          addNotification({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            message: "Failed to load route stops.",
+            type: "error",
+            timestamp: new Date().toISOString(),
+            read: false,
+          })
+        );
+      }
+    }
   };
 
   const handleSaveRoute = async () => {
@@ -615,7 +762,7 @@ const RoutesPage: React.FC = () => {
 
         setRoutes((prev) =>
           prev.map((r) =>
-            r.id === editingRoute.id
+                r.id === editingRoute.id
               ? {
                   ...r,
                   routeNumber,
@@ -630,6 +777,9 @@ const RoutesPage: React.FC = () => {
                     amountError: null,
                     distanceError: null,
                   })),
+                  stopsCount: flattenedStops.length,
+                  stopsLoaded: true,
+                  isLoadingStops: false,
                 }
               : r
           )
@@ -666,6 +816,9 @@ const RoutesPage: React.FC = () => {
               amountError: null,
               distanceError: null,
             })),
+            stopsCount: flattenedStops.length,
+            stopsLoaded: true,
+            isLoadingStops: false,
           },
         ]);
 
@@ -707,87 +860,67 @@ const RoutesPage: React.FC = () => {
   };
 
   useEffect(() => {
+    let isCancelled = false;
+
     const fetchRoutes = async () => {
+      let page = 1;
       try {
-        const response = await api.get("/routes", {
-          params: { page: 1, limit: 20 },
-        });
-        const data = response.data as any;
-        const backendRoutes = Array.isArray(data?.routes) ? data.routes : [];
+        while (!isCancelled) {
+          const response = await api.get("/routes", {
+            params: { page, limit: ROUTES_PAGE_SIZE, include_stops: false },
+          });
+          const data = response.data as any;
+          const backendRoutes = Array.isArray(data?.routes) ? data.routes : [];
+          if (!backendRoutes.length) break;
 
-        if (!backendRoutes.length) return;
+          if (isCancelled) return;
 
-        setRoutes(
-          backendRoutes.map((r: any, index: number) => {
-            const rawStops = Array.isArray(r.stops) ? r.stops : [];
+          setRoutes((prev) => {
+            const nextStartId = prev.length ? prev[prev.length - 1].id + 1 : 1;
+            const mapped = backendRoutes.map((r: any, index: number) => {
+              const rawStops = Array.isArray(r?.stops) ? r.stops : [];
+              const mappedStops = mapBackendStops(rawStops);
+              return {
+                id: nextStartId + index,
+                backendId: r.id || r.ID,
+                routeNumber: r.route_number || r.routeNumber || "",
+                routeName: r.description || r.route_name || "",
+                latitude:
+                  typeof r.latitude === "number"
+                    ? r.latitude
+                    : typeof r.lat === "number"
+                    ? r.lat
+                    : undefined,
+                longitude:
+                  typeof r.longitude === "number"
+                    ? r.longitude
+                    : typeof r.lon === "number"
+                    ? r.lon
+                    : undefined,
+                stops: mappedStops,
+                stopsCount:
+                  typeof r.stops_count === "number"
+                    ? r.stops_count
+                    : mappedStops.length,
+                stopsLoaded: Array.isArray(r?.stops),
+                isLoadingStops: false,
+              } as RouteDefinition;
+            });
+            return [...prev, ...mapped];
+          });
 
-            const mappedStops: RouteStop[] = rawStops.map(
-              (s: any, stopIndex: number) => {
-                if (typeof s === "string") {
-                  return {
-                    id: stopIndex + 1,
-                    name: s,
-                    distance: "",
-                    amount: "",
-                    amountError: null,
-                    distanceError: null,
-                  };
-                }
-
-                const distanceValue =
-                  typeof s.distance_km === "number"
-                    ? String(s.distance_km)
-                    : typeof s.distance === "number"
-                    ? String(s.distance)
-                    : typeof s.distance === "string"
-                    ? s.distance
-                    : "";
-
-                const amountValue =
-                  typeof s.amount === "number"
-                    ? String(s.amount)
-                    : typeof s.amount === "string"
-                    ? s.amount
-                    : "";
-
-                return {
-                  id: stopIndex + 1,
-                  name: s.name || "",
-                  distance: distanceValue,
-                  amount: amountValue,
-                  amountError: null,
-                  distanceError: null,
-                };
-              }
-            );
-
-            return {
-              id: index + 1,
-              backendId: r.id || r.ID,
-              routeNumber: r.route_number || r.routeNumber || "",
-              routeName: r.description || r.route_name || "",
-              latitude:
-                typeof r.latitude === "number"
-                  ? r.latitude
-                  : typeof r.lat === "number"
-                  ? r.lat
-                  : undefined,
-              longitude:
-                typeof r.longitude === "number"
-                  ? r.longitude
-                  : typeof r.lon === "number"
-                  ? r.lon
-                  : undefined,
-              stops: mappedStops,
-            };
-          })
-        );
+          if (backendRoutes.length < ROUTES_PAGE_SIZE) break;
+          page += 1;
+        }
       } catch {
         // If backend is not ready yet, just ignore and use local state
       }
     };
 
     fetchRoutes();
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   return (
@@ -827,7 +960,9 @@ const RoutesPage: React.FC = () => {
                 >
                   <button
                     type="button"
-                    onClick={() => toggleRouteExpanded(route.id)}
+                    onClick={() => {
+                      void toggleRouteExpanded(route);
+                    }}
                     className="flex w-full items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-3">
@@ -841,8 +976,19 @@ const RoutesPage: React.FC = () => {
                           {route.routeName}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {route.stops.length} stop
-                          {route.stops.length !== 1 ? "s" : ""}
+                          {route.isLoadingStops
+                            ? "Loading stops..."
+                            : `${
+                                route.stopsLoaded
+                                  ? route.stops.length
+                                  : route.stopsCount ?? route.stops.length
+                              } stop${
+                                (route.stopsLoaded
+                                  ? route.stops.length
+                                  : route.stopsCount ?? route.stops.length) !== 1
+                                  ? "s"
+                                  : ""
+                              }`}
                         </p>
                       </div>
                     </div>
@@ -852,7 +998,7 @@ const RoutesPage: React.FC = () => {
                           className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleEditRoute(route);
+                            void handleEditRoute(route);
                           }}
                           role="button"
                           aria-label="Edit route"
@@ -927,7 +1073,16 @@ const RoutesPage: React.FC = () => {
                         </div>
 
                         <div className="space-y-1 p-2">
-                          {groupStopsBySection(route.stops).map((section, sectionIndex) => {
+                          {route.isLoadingStops ? (
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs text-slate-500">
+                              Loading stops...
+                            </div>
+                          ) : route.stops.length === 0 ? (
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs text-slate-500">
+                              No stops available for this route.
+                            </div>
+                          ) : (
+                            groupStopsBySection(route.stops).map((section, sectionIndex) => {
                           const sectionCode = `SEC${String(sectionIndex + 1).padStart(2, "0")}`;
 
                           return (
@@ -957,7 +1112,8 @@ const RoutesPage: React.FC = () => {
                               })}
                             </div>
                           );
-                          })}
+                            })
+                          )}
                         </div>
                       </div>
                     </div>

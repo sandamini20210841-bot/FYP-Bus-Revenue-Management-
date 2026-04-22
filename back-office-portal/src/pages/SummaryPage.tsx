@@ -36,18 +36,30 @@ const SummaryPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await api.get("/routes", {
-          params: { page: 1, limit: 500 },
-        });
-        const rows = Array.isArray(response.data?.routes) ? response.data.routes : [];
+        const mapped: RouteSummary[] = [];
+        const pageSize = 100;
+        let page = 1;
 
-        const mapped: RouteSummary[] = rows
-          .map((row: any) => ({
-            id: row.id || "",
-            routeNumber: row.route_number || "",
-            routeName: row.description || "",
-          }))
-          .filter((r: RouteSummary) => r.id && r.routeNumber);
+        while (true) {
+          const response = await api.get("/routes", {
+            params: { page, limit: pageSize, include_stops: false },
+          });
+          const rows = Array.isArray(response.data?.routes) ? response.data.routes : [];
+          if (!rows.length) break;
+
+          mapped.push(
+            ...rows
+              .map((row: any) => ({
+                id: row.id || "",
+                routeNumber: row.route_number || "",
+                routeName: row.description || "",
+              }))
+              .filter((r: RouteSummary) => r.id && r.routeNumber)
+          );
+
+          if (rows.length < pageSize) break;
+          page += 1;
+        }
 
         setRoutes(mapped);
         if (mapped.length > 0) {

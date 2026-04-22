@@ -24,6 +24,60 @@ type StopResponse struct {
 	Amount     *float64 `json:"amount,omitempty"`
 }
 
+type RouteResponse struct {
+	ID          string         `json:"id"`
+	RouteNumber string         `json:"route_number"`
+	BusNumber   string         `json:"bus_number"`
+	Description string         `json:"description"`
+	Latitude    *float64       `json:"latitude,omitempty"`
+	Longitude   *float64       `json:"longitude,omitempty"`
+	Stops       []StopResponse `json:"stops"`
+	StopsCount  int            `json:"stops_count"`
+}
+
+func loadStopsForRoute(routeID string) ([]StopResponse, error) {
+	stopRows, err := database.Query(
+		`SELECT stop_name, distance_km, amount
+		 FROM stops
+		 WHERE route_id = $1
+		 ORDER BY sequence_order ASC`,
+		routeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer stopRows.Close()
+
+	stops := make([]StopResponse, 0)
+	for stopRows.Next() {
+		var name string
+		var distance sql.NullFloat64
+		var amount sql.NullFloat64
+		if err := stopRows.Scan(&name, &distance, &amount); err != nil {
+			log.Printf("failed to scan stop for route %s: %v", routeID, err)
+			continue
+		}
+
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+
+		stop := StopResponse{Name: trimmed}
+		if distance.Valid {
+			v := distance.Float64
+			stop.DistanceKm = &v
+		}
+		if amount.Valid {
+			v := amount.Float64
+			stop.Amount = &v
+		}
+		stops = append(stops, stop)
+	}
+
+	return stops, nil
+}
+
 // CreateRoute creates a new bus route
 func CreateRoute(c *fiber.Ctx) error {
 	if err := enforceModulePermission(c, "routes", "create"); err != nil {
@@ -175,12 +229,30 @@ func GetRoutes(c *fiber.Ctx) error {
 		limit = 10
 	}
 
+	includeStops := true
+	if rawIncludeStops := strings.TrimSpace(c.Query("include_stops")); rawIncludeStops != "" {
+		if parsed, err := strconv.ParseBool(rawIncludeStops); err == nil {
+			includeStops = parsed
+		}
+	}
+
 	offset := (page - 1) * limit
 
 	// Query routes from database (newest first)
 	rows, err := database.Query(
-		`SELECT id, route_number, bus_number, description, latitude, longitude
-		 FROM routes
+		`SELECT r.id,
+		        r.route_number,
+				r.bus_number,
+				r.description,
+				r.latitude,
+				r.longitude,
+				COALESCE(sc.stop_count, 0) AS stop_count
+		 FROM routes r
+		 LEFT JOIN (
+			SELECT route_id, COUNT(*) AS stop_count
+			FROM stops
+			GROUP BY route_id
+		 ) sc ON sc.route_id = r.id
 		 ORDER BY created_at DESC
 		 LIMIT $1 OFFSET $2`,
 		limit,
@@ -194,22 +266,20 @@ func GetRoutes(c *fiber.Ctx) error {
 	}
 	defer rows.Close()
 
-	type RouteResponse struct {
-		ID          string         `json:"id"`
-		RouteNumber string         `json:"route_number"`
-		BusNumber   string         `json:"bus_number"`
-		Description string         `json:"description"`
-		Latitude    *float64       `json:"latitude,omitempty"`
-		Longitude   *float64       `json:"longitude,omitempty"`
-		Stops       []StopResponse `json:"stops"`
-	}
-
 	routes := []RouteResponse{}
 	for rows.Next() {
-		var r RouteResponse
+		r := RouteResponse{}
 		var latitude sql.NullFloat64
 		var longitude sql.NullFloat64
-		if err := rows.Scan(&r.ID, &r.RouteNumber, &r.BusNumber, &r.Description, &latitude, &longitude); err != nil {
+		if err := rows.Scan(
+			&r.ID,
+			&r.RouteNumber,
+			&r.BusNumber,
+			&r.Description,
+			&latitude,
+			&longitude,
+			&r.StopsCount,
+		); err != nil {
 			log.Printf("failed to scan route row: %v", err)
 			continue
 		}
@@ -222,39 +292,13 @@ func GetRoutes(c *fiber.Ctx) error {
 			r.Longitude = &v
 		}
 
-		// Load stops for this route
-		stopRows, err := database.Query(
-			`SELECT stop_name, distance_km, amount
-			 FROM stops
-			 WHERE route_id = $1
-			 ORDER BY sequence_order ASC`,
-			r.ID,
-		)
-		if err != nil {
-			log.Printf("failed to query stops for route %s: %v", r.ID, err)
-		} else {
-			for stopRows.Next() {
-				var name string
-				var distance sql.NullFloat64
-				var amount sql.NullFloat64
-				if err := stopRows.Scan(&name, &distance, &amount); err != nil {
-					log.Printf("failed to scan stop for route %s: %v", r.ID, err)
-					continue
-				}
-				if trimmed := strings.TrimSpace(name); trimmed != "" {
-					stop := StopResponse{Name: trimmed}
-					if distance.Valid {
-						v := distance.Float64
-						stop.DistanceKm = &v
-					}
-					if amount.Valid {
-						v := amount.Float64
-						stop.Amount = &v
-					}
-					r.Stops = append(r.Stops, stop)
-				}
+		if includeStops {
+			stops, stopsErr := loadStopsForRoute(r.ID)
+			if stopsErr != nil {
+				log.Printf("failed to query stops for route %s: %v", r.ID, stopsErr)
+			} else {
+				r.Stops = stops
 			}
-			stopRows.Close()
 		}
 
 		routes = append(routes, r)
@@ -277,14 +321,80 @@ func GetRoutes(c *fiber.Ctx) error {
 
 // GetRoute retrieves a specific route
 func GetRoute(c *fiber.Ctx) error {
-	_ = c.Params("routeId")
+	if err := enforceModulePermission(c, "routes", "view"); err != nil {
+		return err
+	}
 
-	// TODO: Query route from database
-	// TODO: Include stops
-	// TODO: Return route details
+	routeID := strings.TrimSpace(c.Params("routeId"))
+	if routeID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "routeId is required",
+		})
+	}
+
+	route := RouteResponse{
+		Stops: make([]StopResponse, 0),
+	}
+	var latitude sql.NullFloat64
+	var longitude sql.NullFloat64
+	err := database.QueryRow(
+		`SELECT r.id,
+		        r.route_number,
+				r.bus_number,
+				r.description,
+				r.latitude,
+				r.longitude,
+				COALESCE(sc.stop_count, 0) AS stop_count
+		 FROM routes r
+		 LEFT JOIN (
+			SELECT route_id, COUNT(*) AS stop_count
+			FROM stops
+			GROUP BY route_id
+		 ) sc ON sc.route_id = r.id
+		 WHERE r.id = $1`,
+		routeID,
+	).Scan(
+		&route.ID,
+		&route.RouteNumber,
+		&route.BusNumber,
+		&route.Description,
+		&latitude,
+		&longitude,
+		&route.StopsCount,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Route not found",
+			})
+		}
+
+		log.Printf("failed to query route %s: %v", routeID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to load route",
+		})
+	}
+
+	if latitude.Valid {
+		v := latitude.Float64
+		route.Latitude = &v
+	}
+	if longitude.Valid {
+		v := longitude.Float64
+		route.Longitude = &v
+	}
+
+	stops, stopErr := loadStopsForRoute(route.ID)
+	if stopErr != nil {
+		log.Printf("failed to query stops for route %s: %v", route.ID, stopErr)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to load route stops",
+		})
+	}
+	route.Stops = stops
 
 	return c.JSON(fiber.Map{
-		"route": fiber.Map{},
+		"route": route,
 	})
 }
 
@@ -477,10 +587,21 @@ func DeleteRoute(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
+	// Avoid waiting indefinitely on locked rows.
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '4s'`); err != nil {
+		log.Printf("failed to set lock timeout for route delete %s: %v", routeID, err)
+	}
+
 	// Lock the route row to serialize deletes/updates and avoid race conditions
 	// with concurrent updates that may hold locks on dependent rows.
 	var locked string
-	if err := tx.QueryRow(`SELECT id FROM routes WHERE id = $1 FOR UPDATE`, routeID).Scan(&locked); err != nil {
+	if err := tx.QueryRow(`SELECT id FROM routes WHERE id = $1 FOR UPDATE NOWAIT`, routeID).Scan(&locked); err != nil {
+		errText := strings.ToLower(err.Error())
+		if strings.Contains(errText, "could not obtain lock on row") || strings.Contains(errText, "lock timeout") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error": "Route is being updated by another request. Please retry in a few seconds.",
+			})
+		}
 		log.Printf("route %s not found for delete: %v", routeID, err)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Route not found"})
 	}

@@ -138,75 +138,93 @@ const PurchaseTicketPage = () => {
 
   // Load all stops (locations) from backend routes so user can pick them
   useEffect(() => {
+    let isCancelled = false;
+
     const fetchStops = async () => {
       try {
-        const response = await api.get("/routes", {
-          params: { page: 1, limit: 200 },
-        });
-        const routes = response.data?.routes || [];
-
         const names = new Set<string>();
         const busNumbers = new Set<string>();
         const routeStopsMap: Record<string, Set<string>> = {};
         const routeStopsDetailMap: Record<string, StopDetail[]> = {};
+        const syncAggregatesToState = () => {
+          if (isCancelled) return;
 
-        routes.forEach((route: any) => {
-          const routeNum =
-            route?.route_number && typeof route.route_number === "string"
-              ? route.route_number
-              : "";
-          if (routeNum) {
-            busNumbers.add(routeNum);
-            if (!routeStopsMap[routeNum]) {
-              routeStopsMap[routeNum] = new Set<string>();
-            }
-            if (!routeStopsDetailMap[routeNum]) {
-              routeStopsDetailMap[routeNum] = [];
-            }
-          }
+          const stopsByRouteObj: Record<string, string[]> = {};
+          Object.keys(routeStopsMap).forEach((key) => {
+            // Preserve insertion order from backend (stops are returned by sequence_order ASC).
+            stopsByRouteObj[key] = Array.from(routeStopsMap[key]);
+          });
 
-          (route.stops || []).forEach((stop: any) => {
-            if (stop?.name && typeof stop.name === "string") {
-              const displayName = getStopDisplayName(stop.name);
-              names.add(displayName);
-              if (routeNum) {
-                routeStopsMap[routeNum].add(displayName);
+          const stopsDetailsByRouteObj: Record<string, StopDetail[]> = {};
+          Object.keys(routeStopsDetailMap).forEach((key) => {
+            // keep original order from backend; just shallow copy
+            stopsDetailsByRouteObj[key] = [...routeStopsDetailMap[key]];
+          });
 
-                const rawAmount = stop.amount;
-                let parsedAmount: number | null = null;
-                if (typeof rawAmount === "number") {
-                  parsedAmount = rawAmount;
-                } else if (typeof rawAmount === "string") {
-                  const n = parseFloat(rawAmount);
-                  parsedAmount = Number.isNaN(n) ? null : n;
-                }
+          setStopsByRoute(stopsByRouteObj);
+          setStopsDetailsByRoute(stopsDetailsByRouteObj);
+          setAllBusNumbers(Array.from(busNumbers).sort());
+          setAllStops(Array.from(names));
+        };
 
-                routeStopsDetailMap[routeNum].push({
-                  name: stop.name,
-                  displayName,
-                  amount: parsedAmount,
-                });
+        const pageSize = 50;
+        let page = 1;
+
+        while (!isCancelled) {
+          const response = await api.get("/routes", {
+            params: { page, limit: pageSize, include_stops: true },
+          });
+          const routes = Array.isArray(response.data?.routes)
+            ? response.data.routes
+            : [];
+          if (!routes.length) break;
+
+          routes.forEach((route: any) => {
+            const routeNum =
+              route?.route_number && typeof route.route_number === "string"
+                ? route.route_number
+                : "";
+            if (routeNum) {
+              busNumbers.add(routeNum);
+              if (!routeStopsMap[routeNum]) {
+                routeStopsMap[routeNum] = new Set<string>();
+              }
+              if (!routeStopsDetailMap[routeNum]) {
+                routeStopsDetailMap[routeNum] = [];
               }
             }
+
+            (route.stops || []).forEach((stop: any) => {
+              if (stop?.name && typeof stop.name === "string") {
+                const displayName = getStopDisplayName(stop.name);
+                names.add(displayName);
+                if (routeNum) {
+                  routeStopsMap[routeNum].add(displayName);
+
+                  const rawAmount = stop.amount;
+                  let parsedAmount: number | null = null;
+                  if (typeof rawAmount === "number") {
+                    parsedAmount = rawAmount;
+                  } else if (typeof rawAmount === "string") {
+                    const n = parseFloat(rawAmount);
+                    parsedAmount = Number.isNaN(n) ? null : n;
+                  }
+
+                  routeStopsDetailMap[routeNum].push({
+                    name: stop.name,
+                    displayName,
+                    amount: parsedAmount,
+                  });
+                }
+              }
+            });
           });
-        });
 
-        const stopsByRouteObj: Record<string, string[]> = {};
-        Object.keys(routeStopsMap).forEach((key) => {
-          // Preserve insertion order from backend (stops are returned by sequence_order ASC).
-          stopsByRouteObj[key] = Array.from(routeStopsMap[key]);
-        });
+          syncAggregatesToState();
 
-        const stopsDetailsByRouteObj: Record<string, StopDetail[]> = {};
-        Object.keys(routeStopsDetailMap).forEach((key) => {
-          // keep original order from backend; just shallow copy
-          stopsDetailsByRouteObj[key] = [...routeStopsDetailMap[key]];
-        });
-
-        setStopsByRoute(stopsByRouteObj);
-        setStopsDetailsByRoute(stopsDetailsByRouteObj);
-        setAllBusNumbers(Array.from(busNumbers).sort());
-        setAllStops(Array.from(names));
+          if (routes.length < pageSize) break;
+          page += 1;
+        }
       } catch (err) {
         // If this fails, user can still type locations manually
         console.error("Failed to load stops", err);
@@ -214,6 +232,9 @@ const PurchaseTicketPage = () => {
     };
 
     fetchStops();
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   // Close dropdowns when clicking outside
