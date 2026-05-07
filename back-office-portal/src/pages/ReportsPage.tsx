@@ -42,6 +42,7 @@ const ReportsPage: React.FC = () => {
 
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const routeDropdownRef = useRef<HTMLDivElement | null>(null);
+  const transactionsRequestIdRef = useRef(0);
 
   const formatCsvField = (value: string | number) => {
     const text = String(value ?? "");
@@ -123,18 +124,23 @@ const ReportsPage: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const rowsPerPage = 200;
   const loadTransactions = useCallback(async () => {
+    const requestId = (transactionsRequestIdRef.current += 1);
     setIsLoadingTransactions(true);
     setTransactionsError(null);
     try {
       const params: any = { page: currentPage, limit: rowsPerPage };
       if (selectedDate) {
+        params.date = selectedDate;
         params.dateFrom = selectedDate;
         params.dateTo = selectedDate;
       }
       if (routeFilter && routeFilter !== "all") params.route = routeFilter;
       if (busNumberFilter && busNumberFilter !== "all") params.bus = busNumberFilter;
 
-      const response = await api.get("/transactions", { params });
+      const response = await api.get("/transactions", { params, timeout: 60000 });
+      if (requestId != transactionsRequestIdRef.current) {
+        return;
+      }
       const rows = Array.isArray(response.data?.transactions)
         ? response.data.transactions
         : [];
@@ -155,6 +161,9 @@ const ReportsPage: React.FC = () => {
       setTotalPages(Math.max(1, Math.ceil(Number(response.data?.pagination?.total || mapped.length) / rowsPerPage)));
     } catch (err: any) {
       console.error("Failed to load transactions", err);
+      if (requestId != transactionsRequestIdRef.current) {
+        return;
+      }
       setTransactions([]);
       let errorMsg = "Failed to load transactions.";
       if (err?.response?.data?.error) {
@@ -164,7 +173,9 @@ const ReportsPage: React.FC = () => {
       }
       setTransactionsError(errorMsg);
     } finally {
-      setIsLoadingTransactions(false);
+      if (requestId === transactionsRequestIdRef.current) {
+        setIsLoadingTransactions(false);
+      }
     }
   }, [currentPage, selectedDate, routeFilter, busNumberFilter]);
 
@@ -202,24 +213,21 @@ const ReportsPage: React.FC = () => {
   // Filtering is now applied to the current page only
   const filteredTransactions = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
-    const pickedDate = selectedDate ? new Date(`${selectedDate}T00:00:00`) : null;
+    const pickedDate = selectedDate.trim();
+    const normalize = (value: string) => value.trim().toLowerCase();
     return transactions.filter((tr) => {
-      if (busNumberFilter !== "all" && tr.bus_number !== busNumberFilter) {
+      if (busNumberFilter !== "all" && normalize(tr.bus_number) !== normalize(busNumberFilter)) {
         return false;
       }
-      if (routeFilter !== "all" && tr.route_number !== routeFilter) {
+      if (routeFilter !== "all" && normalize(tr.route_number) !== normalize(routeFilter)) {
         return false;
       }
       if (pickedDate) {
         const trDate = tr.transaction_date ? new Date(tr.transaction_date) : null;
-        if (!trDate || Number.isNaN(trDate.getTime())) {
-          return false;
-        }
-        const sameDay =
-          trDate.getFullYear() === pickedDate.getFullYear() &&
-          trDate.getMonth() === pickedDate.getMonth() &&
-          trDate.getDate() === pickedDate.getDate();
-        if (!sameDay) {
+        const trDateKey = trDate && !Number.isNaN(trDate.getTime())
+          ? trDate.toLocaleDateString("en-CA")
+          : "";
+        if (trDateKey !== pickedDate) {
           return false;
         }
       }
@@ -377,6 +385,7 @@ const ReportsPage: React.FC = () => {
 
       const response = await api.post(`/reports/export-transactions-csv`, body, {
         responseType: "blob",
+        timeout: 120000,
       });
 
       const blob = new Blob([response.data], { type: response.headers["content-type"] || "text/csv" });

@@ -31,6 +31,23 @@ func GetTransactions(c *fiber.Ctx) error {
 	userID := strings.TrimSpace(c.Query("userId"))
 	dateFrom := strings.TrimSpace(c.Query("dateFrom"))
 	dateTo := strings.TrimSpace(c.Query("dateTo"))
+	if dateFrom == "" {
+		dateFrom = strings.TrimSpace(c.Query("date_from"))
+	}
+	if dateTo == "" {
+		dateTo = strings.TrimSpace(c.Query("date_to"))
+	}
+	date := strings.TrimSpace(c.Query("date"))
+	if date != "" && dateFrom == "" && dateTo == "" {
+		dateFrom = date
+		dateTo = date
+	}
+	if dateFrom != "" && dateTo == "" {
+		dateTo = dateFrom
+	}
+	if dateTo != "" && dateFrom == "" {
+		dateFrom = dateTo
+	}
 	status := strings.TrimSpace(c.Query("status"))
 	busNumber := strings.TrimSpace(c.Query("bus"))
 	routeNumber := strings.TrimSpace(c.Query("route"))
@@ -53,15 +70,21 @@ func GetTransactions(c *fiber.Ctx) error {
 		args = append(args, userID)
 		argPos++
 	}
-	if dateFrom != "" {
-		whereParts = append(whereParts, "tr.transaction_date >= $"+itoa(argPos)+"::date")
+	if dateFrom != "" && dateTo != "" && dateFrom == dateTo {
+		whereParts = append(whereParts, "tr.transaction_date::date = $"+itoa(argPos)+"::date")
 		args = append(args, dateFrom)
 		argPos++
-	}
-	if dateTo != "" {
-		whereParts = append(whereParts, "tr.transaction_date < ($"+itoa(argPos)+"::date + INTERVAL '1 day')")
-		args = append(args, dateTo)
-		argPos++
+	} else {
+		if dateFrom != "" {
+			whereParts = append(whereParts, "tr.transaction_date >= $"+itoa(argPos)+"::date")
+			args = append(args, dateFrom)
+			argPos++
+		}
+		if dateTo != "" {
+			whereParts = append(whereParts, "tr.transaction_date < ($"+itoa(argPos)+"::date + INTERVAL '1 day')")
+			args = append(args, dateTo)
+			argPos++
+		}
 	}
 	if status != "" {
 		whereParts = append(whereParts, "LOWER(tr.status) = LOWER($"+itoa(argPos)+")")
@@ -69,12 +92,12 @@ func GetTransactions(c *fiber.Ctx) error {
 		argPos++
 	}
 	if busNumber != "" {
-		whereParts = append(whereParts, "t.bus_number = $"+itoa(argPos))
+		whereParts = append(whereParts, "TRIM(COALESCE(t.bus_number, r.bus_number, '')) ILIKE TRIM($"+itoa(argPos)+")")
 		args = append(args, busNumber)
 		argPos++
 	}
 	if routeNumber != "" {
-		whereParts = append(whereParts, "r.route_number = $"+itoa(argPos))
+		whereParts = append(whereParts, "TRIM(COALESCE(r.route_number, '')) ILIKE TRIM($"+itoa(argPos)+")")
 		args = append(args, routeNumber)
 		argPos++
 	}
@@ -107,7 +130,7 @@ func GetTransactions(c *fiber.Ctx) error {
 		SELECT
 			tr.id,
 			COALESCE(r.route_number, ''),
-			COALESCE(t.bus_number, ''),
+			COALESCE(t.bus_number, r.bus_number, ''),
 			COALESCE(tr.ticket_id, ''),
 			tr.transaction_date,
 			tr.amount,
