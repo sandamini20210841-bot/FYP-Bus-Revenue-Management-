@@ -82,7 +82,7 @@ func roleDefaultPermissions(role string) map[string]accessPermissionState {
 		defaults["routes"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
 	case "time_keeper":
 		defaults["routes"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: false}
-		defaults["buses"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: false}
+		defaults["buses"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
 		defaults["summary"] = accessPermissionState{canCreate: false, canView: true, canEdit: false, canDelete: false}
 		defaults["timetable"] = accessPermissionState{canCreate: true, canView: true, canEdit: true, canDelete: true}
 	case "accountant":

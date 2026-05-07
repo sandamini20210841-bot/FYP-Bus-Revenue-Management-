@@ -124,9 +124,9 @@ const buildRoleDefaultMap = (role: string): PermissionMap => {
     };
     map.buses = {
       module_name: "buses",
-      can_create: true,
+      can_create: false,
       can_view: true,
-      can_edit: true,
+      can_edit: false,
       can_delete: false,
     };
     map.summary = {

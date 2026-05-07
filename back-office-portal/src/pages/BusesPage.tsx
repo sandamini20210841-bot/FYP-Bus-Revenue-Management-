@@ -11,6 +11,7 @@ type BusRow = {
   route_number: string;
   bus_number: string;
   owner_name?: string;
+  availability?: string;
 };
 
 type RouteOption = {
@@ -40,6 +41,7 @@ const BusesPage: React.FC = () => {
     return "admin";
   })();
   const showBusOwnerColumn = currentRole === "admin";
+  const canEditAvailability = currentRole === "admin" || currentRole === "bus_owner";
 
   const [buses, setBuses] = useState<BusRow[]>([]);
   const [routes, setRoutes] = useState<RouteOption[]>([]);
@@ -54,7 +56,8 @@ const BusesPage: React.FC = () => {
   const [editingBus, setEditingBus] = useState<BusRow | null>(null);
   const [isDeleteBusyId, setIsDeleteBusyId] = useState<string | null>(null);
   const [busPendingDelete, setBusPendingDelete] = useState<BusRow | null>(null);
-  const tableColumnCount = (showBusOwnerColumn ? 1 : 0) + (canEditBus || canDeleteBus ? 1 : 0) + 2;
+  const [isUpdatingAvailabilityId, setIsUpdatingAvailabilityId] = useState<string | null>(null);
+  const tableColumnCount = (showBusOwnerColumn ? 1 : 0) + (canEditBus || canDeleteBus ? 1 : 0) + 3;
 
   const loadBuses = async () => {
     setLoading(true);
@@ -188,6 +191,35 @@ const BusesPage: React.FC = () => {
     }
   };
 
+  const updateAvailability = async (bus: BusRow, nextAvailability: string) => {
+    if (!canEditAvailability || isUpdatingAvailabilityId) return;
+
+    const normalized = nextAvailability === "unavailable" ? "unavailable" : "available";
+    const previous = bus.availability === "unavailable" ? "unavailable" : "available";
+    if (normalized === previous) return;
+
+    setIsUpdatingAvailabilityId(bus.id);
+    setError(null);
+    setBuses((prev) =>
+      prev.map((row) =>
+        row.id === bus.id ? { ...row, availability: normalized } : row
+      )
+    );
+
+    try {
+      await api.put(`/buses/${bus.id}`, { availability: normalized });
+    } catch (err: any) {
+      setBuses((prev) =>
+        prev.map((row) =>
+          row.id === bus.id ? { ...row, availability: previous } : row
+        )
+      );
+      setError(err?.response?.data?.error || "Failed to update availability.");
+    } finally {
+      setIsUpdatingAvailabilityId(null);
+    }
+  };
+
   const { t } = useTranslation();
 
   return (
@@ -206,7 +238,7 @@ const BusesPage: React.FC = () => {
               className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
             >
               <span className="text-sm leading-none">+</span>
-              <span>Create bus</span>
+              <span>Register bus</span>
             </button>
           )}
         </div>
@@ -217,6 +249,7 @@ const BusesPage: React.FC = () => {
               <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="py-2 pr-4 font-semibold">Route</th>
                 <th className="py-2 pr-4 font-semibold">Bus Number</th>
+                <th className="py-2 pr-4 font-semibold">Availability</th>
                 {showBusOwnerColumn && <th className="py-2 pr-4 font-semibold">Bus Owner</th>}
                 {(canEditBus || canDeleteBus) && <th className="py-2 pr-0 font-semibold">Action</th>}
               </tr>
@@ -241,6 +274,37 @@ const BusesPage: React.FC = () => {
                 <tr key={bus.id} className="border-b border-slate-100 last:border-b-0">
                   <td className="py-3 pr-4">{bus.route_number || "-"}</td>
                   <td className="py-3 pr-4">{bus.bus_number || "-"}</td>
+                  <td className="py-3 pr-4">
+                    {canEditAvailability ? (
+                      <select
+                        value={bus.availability === "unavailable" ? "unavailable" : "available"}
+                        onChange={(e) => updateAvailability(bus, e.target.value)}
+                        disabled={isUpdatingAvailabilityId === bus.id}
+                        className={`w-full max-w-[140px] rounded-lg border bg-white px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 ${
+                          bus.availability === "unavailable"
+                            ? "border-red-200 text-red-600"
+                            : "border-emerald-200 text-emerald-600"
+                        }`}
+                      >
+                        <option value="available" style={{ color: "#16a34a" }}>
+                          available
+                        </option>
+                        <option value="unavailable" style={{ color: "#dc2626" }}>
+                          unavailable
+                        </option>
+                      </select>
+                    ) : (
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                          bus.availability === "unavailable"
+                            ? "border-red-200 text-red-600"
+                            : "border-emerald-200 text-emerald-600"
+                        }`}
+                      >
+                        {bus.availability === "unavailable" ? "unavailable" : "available"}
+                      </span>
+                    )}
+                  </td>
                   {showBusOwnerColumn && <td className="py-3 pr-4">{bus.owner_name || "-"}</td>}
                   {(canEditBus || canDeleteBus) && (
                     <td className="py-3 pr-0">
@@ -290,7 +354,7 @@ const BusesPage: React.FC = () => {
           <div className="w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-xl">
             <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">{editingBus ? "Edit Bus" : "Create Bus"}</h3>
+                <h3 className="text-sm font-semibold text-slate-900">{editingBus ? "Edit Bus" : "Register Bus"}</h3>
                 <p className="text-xs text-slate-500 mt-1">Select route and enter bus number.</p>
               </div>
               <button type="button" onClick={closeCreateModal} className="text-slate-400 hover:text-slate-600 text-lg leading-none">×</button>

@@ -20,6 +20,7 @@ type busRecord struct {
 	routeID   string
 	routeNum  string
 	busNumber string
+	availability string
 	ownerID   sql.NullString
 	ownerName sql.NullString
 	createdBy sql.NullString
@@ -45,12 +46,15 @@ func ensureBusesSchema() {
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
 		bus_number VARCHAR(50) NOT NULL,
+		availability VARCHAR(20) NOT NULL DEFAULT 'available',
 		owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
 		created_by UUID REFERENCES users(id) ON DELETE SET NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE (route_id, bus_number)
 	)`)
+
+	_, _ = database.Exec(`ALTER TABLE buses ADD COLUMN IF NOT EXISTS availability VARCHAR(20) NOT NULL DEFAULT 'available'`)
 }
 
 func ensureTimetableSchema() error {
@@ -153,6 +157,7 @@ func GetBuses(c *fiber.Ctx) error {
 	                 b.route_id,
 	                 COALESCE(r.route_number, ''),
 	                 b.bus_number,
+	                 COALESCE(b.availability, 'available'),
 	                 b.owner_user_id::text,
 	                 COALESCE(creator.full_name, creator.email, ''),
 	                 b.created_by::text,
@@ -173,7 +178,7 @@ func GetBuses(c *fiber.Ctx) error {
 	buses := []fiber.Map{}
 	for rows.Next() {
 		var b busRecord
-		if scanErr := rows.Scan(&b.id, &b.routeID, &b.routeNum, &b.busNumber, &b.ownerID, &b.ownerName, &b.createdBy, &b.createdAt, &b.updatedAt); scanErr != nil {
+		if scanErr := rows.Scan(&b.id, &b.routeID, &b.routeNum, &b.busNumber, &b.availability, &b.ownerID, &b.ownerName, &b.createdBy, &b.createdAt, &b.updatedAt); scanErr != nil {
 			continue
 		}
 		buses = append(buses, fiber.Map{
@@ -181,6 +186,7 @@ func GetBuses(c *fiber.Ctx) error {
 			"route_id":      b.routeID,
 			"route_number":  b.routeNum,
 			"bus_number":    b.busNumber,
+			"availability":  b.availability,
 			"owner_user_id": b.ownerID.String,
 			"owner_name":    b.ownerName.String,
 			"created_at":    b.createdAt,
@@ -253,7 +259,8 @@ func UpdateBus(c *fiber.Ctx) error {
 	}
 
 	type updateBusRequest struct {
-		BusNumber string `json:"bus_number"`
+		BusNumber    string `json:"bus_number"`
+		Availability string `json:"availability"`
 	}
 	var req updateBusRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -261,11 +268,36 @@ func UpdateBus(c *fiber.Ctx) error {
 	}
 
 	busNumber := strings.TrimSpace(req.BusNumber)
-	if busNumber == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "bus_number is required"})
+	availability := strings.ToLower(strings.TrimSpace(req.Availability))
+	if busNumber == "" && availability == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "bus_number or availability is required"})
+	}
+	if availability != "" && availability != "available" && availability != "unavailable" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "availability must be available or unavailable"})
 	}
 
-	res, err := database.Exec(`UPDATE buses SET bus_number = $1, updated_at = NOW() WHERE id = $2`, busNumber, busID)
+	role := normalizeRole(fmt.Sprint(c.Locals("userRole")))
+	if availability != "" && role != "admin" && role != "bus_owner" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only admins or bus owners can update availability"})
+	}
+
+	setParts := []string{}
+	args := []interface{}{}
+	argPos := 1
+	if busNumber != "" {
+		setParts = append(setParts, "bus_number = $"+strconv.Itoa(argPos))
+		args = append(args, busNumber)
+		argPos++
+	}
+	if availability != "" {
+		setParts = append(setParts, "availability = $"+strconv.Itoa(argPos))
+		args = append(args, availability)
+		argPos++
+	}
+	setParts = append(setParts, "updated_at = NOW()")
+	args = append(args, busID)
+
+	res, err := database.Exec(`UPDATE buses SET `+strings.Join(setParts, ", ")+` WHERE id = $`+strconv.Itoa(argPos), args...)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update bus"})
 	}

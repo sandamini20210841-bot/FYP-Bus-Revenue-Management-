@@ -142,6 +142,7 @@ CREATE TABLE buses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
   bus_number VARCHAR(50) NOT NULL,
+  availability VARCHAR(20) NOT NULL DEFAULT 'available',
   owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

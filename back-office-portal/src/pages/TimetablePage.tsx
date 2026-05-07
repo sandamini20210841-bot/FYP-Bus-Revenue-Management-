@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../utils/axios";
 
 type RouteSummary = {
@@ -77,7 +77,7 @@ const TimetablePage: React.FC = () => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [routeBuses, setRouteBuses] = useState<Array<{ bus_number: string }>>([]);
+  const [routeBuses, setRouteBuses] = useState<Array<{ bus_number: string; availability?: string }>>([]);
   const [persistedEntries, setPersistedEntries] = useState<TimetableEntry[]>([]);
   const [draftEntries, setDraftEntries] = useState<TimetableEntry[]>([]);
   const [draftEntriesByDate, setDraftEntriesByDate] = useState<Record<string, TimetableEntry[]>>({});
@@ -94,6 +94,9 @@ const TimetablePage: React.FC = () => {
   const [calendarActionKey, setCalendarActionKey] = useState<string | null>(null);
   const [timetableError, setTimetableError] = useState<string | null>(null);
   const [timetableSuccess, setTimetableSuccess] = useState<string | null>(null);
+  const [isBusDropdownOpen, setIsBusDropdownOpen] = useState(false);
+
+  const busDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const getApiErrorMessage = (err: any, fallback: string): string => {
     const data = err?.response?.data;
@@ -123,6 +126,10 @@ const TimetablePage: React.FC = () => {
     () => routes.find((r) => r.id === timetableRouteId) || null,
     [routes, timetableRouteId]
   );
+
+  const selectedBusOption = useMemo(() => {
+    return routeBuses.find((bus) => bus.bus_number === busToAssign) || null;
+  }, [routeBuses, busToAssign]);
 
   const makeDraftKey = (routeId: string, date: string) => `${routeId}__${date}`;
 
@@ -166,6 +173,23 @@ const TimetablePage: React.FC = () => {
       return String(availableTurns[0] || "");
     });
   }, [availableTurns]);
+
+  useEffect(() => {
+    if (!isBusDropdownOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (busDropdownRef.current && !busDropdownRef.current.contains(target)) {
+        setIsBusDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isBusDropdownOpen]);
 
   useEffect(() => {
     const loadRoutes = async () => {
@@ -274,9 +298,11 @@ const TimetablePage: React.FC = () => {
       const rows = Array.isArray(response.data?.buses) ? response.data.buses : [];
       setRouteBuses(rows);
       setBusToAssign(rows[0]?.bus_number || "");
+      setIsBusDropdownOpen(false);
     } catch {
       setRouteBuses([]);
       setBusToAssign("");
+      setIsBusDropdownOpen(false);
     }
   };
 
@@ -964,18 +990,64 @@ const TimetablePage: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Bus number</label>
-                    <select
-                      value={busToAssign}
-                      onChange={(e) => setBusToAssign(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                    >
-                      {!routeBuses.length && <option value="">No registered buses</option>}
-                      {routeBuses.map((bus) => (
-                        <option key={bus.bus_number} value={bus.bus_number}>
-                          {bus.bus_number}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative" ref={busDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsBusDropdownOpen((open) => !open)}
+                        disabled={!routeBuses.length}
+                        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        {selectedBusOption ? (
+                          <span className="inline-flex items-center gap-1">
+                            <span>{selectedBusOption.bus_number}</span>
+                            <span>(</span>
+                            <span
+                              className={
+                                selectedBusOption.availability === "unavailable"
+                                  ? "text-red-600"
+                                  : "text-emerald-600"
+                              }
+                            >
+                              {selectedBusOption.availability === "unavailable" ? "unavailable" : "available"}
+                            </span>
+                            <span>)</span>
+                          </span>
+                        ) : (
+                          <span>{routeBuses.length ? "Select bus" : "No registered buses"}</span>
+                        )}
+                        <span className="text-slate-400">▾</span>
+                      </button>
+                      {isBusDropdownOpen && (
+                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                          {routeBuses.map((bus) => {
+                            const availability =
+                              bus.availability === "unavailable" ? "unavailable" : "available";
+                            return (
+                              <button
+                                key={bus.bus_number}
+                                type="button"
+                                onClick={() => {
+                                  setBusToAssign(bus.bus_number);
+                                  setIsBusDropdownOpen(false);
+                                }}
+                                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                <span>{bus.bus_number}</span>
+                                <span
+                                  className={
+                                    availability === "unavailable"
+                                      ? "text-red-600"
+                                      : "text-emerald-600"
+                                  }
+                                >
+                                  {availability}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div>
