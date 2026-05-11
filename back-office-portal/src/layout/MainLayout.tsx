@@ -20,6 +20,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const userFromStore = useSelector((state: RootState) => state.auth.user);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { canView } = useAccessPermissions();
+  const theme = useSelector((state: RootState) => state.ui.theme);
+  const isDark = theme === "dark";
   const { t } = useTranslation();
 
   const fullName = useMemo(() => {
@@ -64,10 +66,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, [rawRole]);
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900">
+    <div
+      className={`flex h-screen ${
+        isDark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
+      }`}
+    >
       {/* Sidebar */}
-      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col">
-        <div className="px-6 pt-6 pb-4 border-b border-slate-100">
+      <aside
+        className={`w-72 flex flex-col ${
+          isDark ? "bg-slate-900 border-r border-slate-800" : "bg-white border-r border-slate-200"
+        }`}
+      >
+        <div
+          className={`px-6 pt-6 pb-4 ${
+            isDark ? "border-b border-slate-800" : "border-b border-slate-100"
+          }`}
+        >
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white text-xl">
               <svg
@@ -123,10 +137,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               </svg>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-semibold text-slate-900">
+              <span className={`text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                 FareLink
               </span>
-              <span className="text-xs text-slate-500">
+              <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 Back-office portal
               </span>
             </div>
@@ -140,14 +154,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-blue-50 text-blue-700"
+                  : isDark
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-50"
               }`
             }
           >
             <span className="text-lg">
               <svg
-                  className="h-5 w-5 text-slate-600"
+                className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                 viewBox="0 0 20 20"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -168,14 +186,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-blue-50 text-blue-700"
+                  : isDark
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-50"
               }`
             }
           >
             <span className="text-lg">
               <svg
-                  className="h-5 w-5 text-slate-600"
+                className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                 viewBox="0 0 20 20"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -213,14 +235,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-blue-50 text-blue-700"
+                  : isDark
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-50"
               }`
             }
           >
             <span className="text-lg">
               <svg
-                  className="h-5 w-5 text-slate-600"
+                className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                 viewBox="0 0 20 20"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -258,14 +284,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-blue-50 text-blue-700"
+                  : isDark
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-50"
               }`
             }
           >
             <span className="text-lg">
               <svg
-                className="h-5 w-5 text-slate-600"
+                className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                 viewBox="0 0 20 20"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -285,14 +315,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-blue-50 text-blue-700"
+                  : isDark
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-50"
               }`
             }
           >
             <span className="text-lg">
               <svg
-                className="h-5 w-5 text-slate-600"
+                className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                 viewBox="0 0 20 20"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -330,14 +364,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-blue-50 text-blue-700"
+                  : isDark
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-50"
               }`
             }
           >
             <span className="text-lg">
               <svg
-                className="h-5 w-5 text-slate-600"
+                className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                 viewBox="0 0 20 20"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -358,14 +396,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-blue-50 text-blue-700"
+                  : isDark
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-50"
               }`
             }
           >
             <span className="text-lg">
               <svg
-                  className="h-5 w-5 text-slate-600"
+                className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                 viewBox="0 0 20 20"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -410,14 +452,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={({ isActive }) =>
               `${navLinkBaseClasses} ${
                 isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
+                  ? isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-blue-50 text-blue-700"
+                  : isDark
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-50"
               }`
             }
           >
             <span className="text-lg">
               <svg
-                className="h-5 w-5 text-slate-600"
+                className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                 viewBox="0 0 20 20"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -438,14 +484,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               className={({ isActive }) =>
                 `${navLinkBaseClasses} ${
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-600 hover:bg-slate-50"
+                    ? isDark
+                      ? "bg-slate-800 text-white"
+                      : "bg-blue-50 text-blue-700"
+                    : isDark
+                      ? "text-slate-300 hover:bg-slate-800"
+                      : "text-slate-600 hover:bg-slate-50"
                 }`
               }
             >
               <span className="text-lg">
                 <svg
-                  className="h-5 w-5 text-slate-600"
+                  className={`h-5 w-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
                   viewBox="0 0 20 20"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
@@ -465,7 +515,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <button
             type="button"
             onClick={() => setIsUserMenuOpen((prev) => !prev)}
-            className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3 flex items-center justify-between text-left hover:bg-slate-100 transition"
+            className={`w-full rounded-2xl border px-4 py-3 flex items-center justify-between text-left transition ${
+              isDark
+                ? "bg-slate-900 border-slate-800 hover:bg-slate-800"
+                : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+            }`}
           >
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">
@@ -477,14 +531,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   .join("") || "U"}
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-semibold text-slate-900">
+                <span className={`text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                   {fullName}
                 </span>
-                <span className="text-xs text-slate-500">{roleLabel}</span>
+                <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {roleLabel}
+                </span>
               </div>
             </div>
             <svg
-                className="h-5 w-5 text-slate-500"
+              className={`h-5 w-5 ${isDark ? "text-slate-400" : "text-slate-500"}`}
               viewBox="0 0 20 20"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -500,18 +556,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </button>
 
           {isUserMenuOpen && (
-            <div className="absolute left-4 right-4 bottom-20 rounded-xl bg-white border border-slate-200 shadow-lg py-1 text-sm z-10">
+            <div
+              className={`absolute left-4 right-4 bottom-20 rounded-xl border shadow-lg py-1 text-sm z-10 ${
+                isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => {
                   setIsUserMenuOpen(false);
                   navigate("/profile");
                 }}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 text-slate-700"
+                className={`w-full flex items-center justify-between px-3 py-2 ${
+                  isDark ? "hover:bg-slate-800 text-slate-200" : "hover:bg-slate-50 text-slate-700"
+                }`}
               >
                 <span className="flex items-center gap-2">
                   <svg
-                      className="h-5 w-5 text-slate-500"
+                    className={`h-5 w-5 ${isDark ? "text-slate-400" : "text-slate-500"}`}
                     viewBox="0 0 20 20"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
@@ -540,11 +602,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   setIsUserMenuOpen(false);
                   navigate("/settings");
                 }}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 text-slate-700"
+                className={`w-full flex items-center justify-between px-3 py-2 ${
+                  isDark ? "hover:bg-slate-800 text-slate-200" : "hover:bg-slate-50 text-slate-700"
+                }`}
               >
                 <span className="flex items-center gap-2">
                   <svg
-                      className="h-5 w-5 text-slate-500"
+                    className={`h-5 w-5 ${isDark ? "text-slate-400" : "text-slate-500"}`}
                     viewBox="0 0 20 20"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
@@ -578,11 +642,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   dispatch(logout());
                   navigate("/login");
                 }}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-red-50 text-red-600 mt-1 border-t border-slate-100"
+                className={`w-full flex items-center justify-between px-3 py-2 text-red-600 mt-1 border-t ${
+                  isDark
+                    ? "border-slate-800 hover:bg-red-500/10"
+                    : "border-slate-100 hover:bg-red-50"
+                }`}
               >
                 <span className="flex items-center gap-2">
                   <svg
-                      className="h-5 w-5 text-red-500"
+                    className="h-5 w-5 text-red-500"
                     viewBox="0 0 20 20"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"

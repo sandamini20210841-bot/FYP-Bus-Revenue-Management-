@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../utils/axios";
 import MobileShell from "../layout/MobileShell";
 import { useTranslation } from "react-i18next";
-import { useAppDispatch } from "../hooks/useAppHooks";
+import { useAppDispatch, useAppSelector } from "../hooks/useAppHooks";
 import { addNotification } from "../store/slices/uiSlice";
 
 type LocationState =
@@ -53,6 +53,8 @@ const PurchaseTicketPage = () => {
   const [locationState, setLocationState] = useState<LocationState>({
     status: "idle",
   });
+  const theme = useAppSelector((state) => state.ui.theme);
+  const isDark = theme === "dark";
   const { t } = useTranslation();
 
   const busDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -61,6 +63,21 @@ const PurchaseTicketPage = () => {
   const dateInputRef = useRef<HTMLInputElement | null>(null);
 
   const todayIso = new Date().toISOString().slice(0, 10);
+  const labelClass = `block text-xs font-medium ${isDark ? "text-slate-200" : "text-slate-600"}`;
+  const inputBase = "w-full rounded-lg border px-3 py-2 text-xs placeholder:text-slate-400 focus:outline-none";
+  const inputTheme = isDark
+    ? "border-slate-700 bg-slate-900/60 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+    : "border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/70";
+  const inputClass = `${inputBase} ${inputTheme}`;
+  const readOnlyClass = isDark
+    ? "border-slate-700 bg-slate-900/60 text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 focus:border-slate-700"
+    : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 focus:border-slate-200";
+  const dropdownClass = isDark
+    ? "border-slate-700 bg-slate-900/95 text-slate-100"
+    : "border-slate-200 bg-white text-slate-900";
+  const dropdownItemClass = isDark
+    ? "text-slate-100 hover:bg-slate-800/80"
+    : "text-slate-700 hover:bg-slate-100";
 
   const getStopDisplayName = (rawName: string): string => {
     const value = rawName.trim();
@@ -584,7 +601,7 @@ const PurchaseTicketPage = () => {
           className="mt-4 space-y-4 max-w-md mx-auto"
         >
           <div className="space-y-1.5" ref={busDropdownRef}>
-            <label className="block text-xs font-medium text-slate-200">{t("purchase.route")}</label>
+            <label className={labelClass}>{t("purchase.route")}</label>
             <div className="relative">
               <input
                 type="text"
@@ -597,15 +614,15 @@ const PurchaseTicketPage = () => {
                 onBlur={() => {
                   setTimeout(() => setShowBusDropdown(false), 120);
                 }}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 pr-7 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+                className={`${inputClass} pr-7`}
                 placeholder={t("purchase.routePlaceholder")}
               />
-              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-400">
+              <span className={`pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 ▾
               </span>
 
               {showBusDropdown && filteredBusNumbers.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/95 text-xs shadow-lg">
+                <div className={`absolute z-20 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border text-xs shadow-lg ${dropdownClass}`}>
                   {filteredBusNumbers.map((num) => (
                     <button
                       key={num}
@@ -618,7 +635,7 @@ const PurchaseTicketPage = () => {
                         setToValue("");
                         setShowBusDropdown(false);
                       }}
-                      className="flex w-full items-center px-3 py-1.5 text-left text-slate-100 hover:bg-slate-800/80"
+                      className={`flex w-full items-center px-3 py-1.5 text-left ${dropdownItemClass}`}
                     >
                       {num}
                     </button>
@@ -629,7 +646,7 @@ const PurchaseTicketPage = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-200">{t("purchase.date")}</label>
+            <label className={labelClass}>{t("purchase.date")}</label>
             <input
               ref={dateInputRef}
               type="date"
@@ -645,12 +662,12 @@ const PurchaseTicketPage = () => {
                 }
                 setSelectedDepartureDate(nextDate);
               }}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+              className={inputClass}
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-200">{t("purchase.time")}</label>
+            <label className={labelClass}>{t("purchase.time")}</label>
             <select
               value={selectedDepartureTime}
               onChange={(e) => {
@@ -659,7 +676,7 @@ const PurchaseTicketPage = () => {
                 const selected = routeDepartures.find((d) => d.departure_time === time);
                 setAllocatedBusNumber(selected?.bus_number || "");
               }}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+              className={inputClass}
             >
               <option value="">{t("purchase.selectTime")}</option>
               {routeDepartures.map((item) => (
@@ -671,18 +688,18 @@ const PurchaseTicketPage = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-200">{t("purchase.busNumber")}</label>
+            <label className={labelClass}>{t("purchase.busNumber")}</label>
             <input
               type="text"
               value={allocatedBusNumber}
               readOnly
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 focus:border-slate-700"
+              className={`w-full rounded-lg border px-3 py-2 text-xs ${readOnlyClass}`}
               placeholder={t("purchase.autoSelected")}
             />
           </div>
 
           <div className="space-y-1.5" ref={fromDropdownRef}>
-            <label className="block text-xs font-medium text-slate-200">{t("purchase.from")}</label>
+            <label className={labelClass}>{t("purchase.from")}</label>
             <div className="relative">
               <input
                 type="text"
@@ -700,15 +717,15 @@ const PurchaseTicketPage = () => {
                 onBlur={() => {
                   setTimeout(() => setShowFromDropdown(false), 120);
                 }}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 pr-7 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+                className={`${inputClass} pr-7`}
                 placeholder={t("purchase.detectingLocation")}
               />
-              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-400">
+              <span className={`pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 ▾
               </span>
 
               {showFromDropdown && filteredFromStops.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/95 text-xs shadow-lg">
+                <div className={`absolute z-20 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border text-xs shadow-lg ${dropdownClass}`}>
                   {filteredFromStops.map((name) => (
                     <button
                       key={name}
@@ -728,7 +745,7 @@ const PurchaseTicketPage = () => {
                         setFromValue(name);
                         setShowFromDropdown(false);
                       }}
-                      className="flex w-full items-center px-3 py-1.5 text-left text-slate-100 hover:bg-slate-800/80"
+                      className={`flex w-full items-center px-3 py-1.5 text-left ${dropdownItemClass}`}
                     >
                       {name}
                     </button>
@@ -737,15 +754,19 @@ const PurchaseTicketPage = () => {
               )}
             </div>
             {locationState.status === "loading" && (
-              <p className="text-[11px] text-slate-500">{t("purchase.gettingLocation")}</p>
+              <p className={`text-[11px] ${isDark ? "text-slate-500" : "text-slate-500"}`}>
+                {t("purchase.gettingLocation")}
+              </p>
             )}
             {locationState.status === "error" && (
-              <p className="text-[11px] text-red-300">{locationState.message} {t("purchase.enterManually")}</p>
+              <p className={`text-[11px] ${isDark ? "text-red-300" : "text-red-600"}`}>
+                {locationState.message} {t("purchase.enterManually")}
+              </p>
             )}
           </div>
 
           <div className="space-y-1.5" ref={toDropdownRef}>
-            <label className="block text-xs font-medium text-slate-200">{t("purchase.to")}</label>
+            <label className={labelClass}>{t("purchase.to")}</label>
             <div className="relative">
               <input
                 type="text"
@@ -764,15 +785,15 @@ const PurchaseTicketPage = () => {
                   setTimeout(() => setShowToDropdown(false), 120);
                 }}
                 required
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 pr-7 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+                className={`${inputClass} pr-7`}
                 placeholder={t("purchase.enterDestination")}
               />
-              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-400">
+              <span className={`pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 ▾
               </span>
 
               {showToDropdown && filteredToStops.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/95 text-xs shadow-lg">
+                <div className={`absolute z-20 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border text-xs shadow-lg ${dropdownClass}`}>
                   {filteredToStops.map((name) => (
                     <button
                       key={name}
@@ -792,7 +813,7 @@ const PurchaseTicketPage = () => {
                         setToValue(name);
                         setShowToDropdown(false);
                       }}
-                      className="flex w-full items-center px-3 py-1.5 text-left text-slate-100 hover:bg-slate-800/80"
+                      className={`flex w-full items-center px-3 py-1.5 text-left ${dropdownItemClass}`}
                     >
                       {name}
                     </button>
@@ -803,21 +824,23 @@ const PurchaseTicketPage = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-200">{t("purchase.amount")}</label>
+            <label className={labelClass}>{t("purchase.amount")}</label>
             <input
               type="text"
               value={amountValue}
               readOnly
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 focus:border-slate-700"
+              className={`w-full rounded-lg border px-3 py-2 text-xs ${readOnlyClass}`}
               placeholder={t("purchase.amountAuto")}
             />
-            <p className="text-[11px] text-slate-500">{t("purchase.amountInfo")}</p>
+            <p className={`text-[11px] ${isDark ? "text-slate-500" : "text-slate-500"}`}>
+              {t("purchase.amountInfo")}
+            </p>
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-white bg-white px-4 py-2.5 text-xs font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70 focus:ring-offset-0 disabled:opacity-60"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:ring-offset-0 disabled:opacity-60"
           >
             {isSubmitting ? t("purchase.processing") : t("purchase.buyTicket")}
           </button>
@@ -825,7 +848,11 @@ const PurchaseTicketPage = () => {
 
         {showPurchaseComplete && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-4">
-            <div className="w-full max-w-[280px] rounded-2xl border border-slate-700 bg-slate-900 px-5 py-6 text-center shadow-xl">
+            <div
+              className={`w-full max-w-[280px] rounded-2xl border px-5 py-6 text-center shadow-xl ${
+                isDark ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"
+              }`}
+            >
               <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -841,14 +868,18 @@ const PurchaseTicketPage = () => {
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
               </div>
-              <p className="text-sm font-semibold text-white">{t("purchase.complete")}</p>
+              <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
+                {t("purchase.complete")}
+              </p>
               <button
                 type="button"
                 onClick={() => {
                   setShowPurchaseComplete(false);
                   navigate("/tickets/history");
                 }}
-                className="mt-3 inline-flex items-center justify-center text-xs font-medium text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
+                className={`mt-3 inline-flex items-center justify-center text-xs font-medium underline underline-offset-2 ${
+                  isDark ? "text-emerald-300 hover:text-emerald-200" : "text-blue-600 hover:text-blue-500"
+                }`}
               >
                 {t("purchase.showHistory")}
               </button>

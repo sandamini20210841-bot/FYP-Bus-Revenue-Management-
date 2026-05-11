@@ -1,9 +1,10 @@
 import { FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";
-import { setLanguage } from "../store/slices/uiSlice";
+import { setLanguage, setTheme } from "../store/slices/uiSlice";
 import MobileShell from "../layout/MobileShell";
 import api from "../utils/axios";
+import { useAppSelector } from "../hooks/useAppHooks";
 
 const SettingsPage = () => {
   const { t } = useTranslation();
@@ -15,6 +16,13 @@ const SettingsPage = () => {
   const [changeSuccess, setChangeSuccess] = useState<string | null>(null);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const theme = useAppSelector((state) => state.ui.theme);
+  const isDark = theme === "dark";
+  const dispatch = useDispatch();
+
+  const toggleTheme = () => {
+    dispatch(setTheme(isDark ? "light" : "dark"));
+  };
 
   const handleChangePassword = async (e: FormEvent) => {
     e.preventDefault();
@@ -59,17 +67,25 @@ const SettingsPage = () => {
   return (
     <MobileShell title={t("common.settings")} subtitle={t("settings.subtitle")}>
       <div className="max-w-sm mx-auto mt-4 space-y-4 text-xs">
-        <section className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+        <section
+          className={`rounded-xl border px-4 py-3 ${
+            isDark ? "border-slate-800 bg-slate-900/60" : "border-slate-200 bg-white"
+          }`}
+        >
           <h2 className="text-[13px] font-semibold mb-2">{t("settings.account")}</h2>
-          <p className="text-slate-400 mb-2">{t("settings.accountDescription")}</p>
-          <ul className="space-y-1.5 text-slate-300 mb-3">
+          <p className={isDark ? "text-slate-400 mb-2" : "text-slate-500 mb-2"}>
+            {t("settings.accountDescription")}
+          </p>
+          <ul className={`space-y-1.5 mb-3 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
             <li className="flex items-center justify-between">
-              <span className="text-slate-400">{t("profile.myProfile")}</span>
-              <span className="text-slate-200 text-[11px]">{t("settings.viewEditProfile")}</span>
+              <span className={isDark ? "text-slate-400" : "text-slate-500"}>{t("profile.myProfile")}</span>
+              <span className={`text-[11px] ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                {t("settings.viewEditProfile")}
+              </span>
             </li>
           </ul>
 
-          <div className="mt-3 border-t border-slate-800 pt-3">
+          <div className={`mt-3 pt-3 ${isDark ? "border-t border-slate-800" : "border-t border-slate-200"}`}>
             <h3 className="text-[12px] font-semibold mb-2">{t("settings.changePassword")}</h3>
             {changeError && (
               <div className="mb-2 rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-red-200">
@@ -90,7 +106,11 @@ const SettingsPage = () => {
                     type={showCurrentPassword ? "text" : "password"}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
+                    className={`w-full rounded-lg border px-3 pr-9 py-2 text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 ${
+                      isDark
+                        ? "border-slate-800 bg-slate-900/60 text-white"
+                        : "border-slate-200 bg-white text-slate-900"
+                    }`}
                     placeholder={t("settings.enterCurrentPassword")}
                   />
                   <button
@@ -140,7 +160,11 @@ const SettingsPage = () => {
                     type={showNewPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
+                    className={`w-full rounded-lg border px-3 pr-9 py-2 text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 ${
+                      isDark
+                        ? "border-slate-800 bg-slate-900/60 text-white"
+                        : "border-slate-200 bg-white text-slate-900"
+                    }`}
                     placeholder={t("settings.newPasswordPlaceholder")}
                   />
                   <button
@@ -189,7 +213,11 @@ const SettingsPage = () => {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
+                  className={`w-full rounded-lg border px-3 py-2 text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 ${
+                    isDark
+                      ? "border-slate-800 bg-slate-900/60 text-white"
+                      : "border-slate-200 bg-white text-slate-900"
+                  }`}
                   placeholder="Repeat new password"
                 />
               </div>
@@ -197,7 +225,7 @@ const SettingsPage = () => {
               <button
                 type="submit"
                 disabled={changing}
-                className="mt-1 inline-flex w-full items-center justify-center rounded-lg border border-white bg-white px-4 py-2 text-xs font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70 disabled:opacity-60"
+                className="mt-1 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 disabled:opacity-60"
               >
                 {changing ? t("settings.updating") : t("settings.updatePassword")}
               </button>
@@ -205,21 +233,48 @@ const SettingsPage = () => {
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+        <section
+          className={`rounded-xl border px-4 py-3 ${
+            isDark ? "border-slate-800 bg-slate-900/60" : "border-slate-200 bg-white"
+          }`}
+        >
           <h2 className="text-[13px] font-semibold mb-2">{t("settings.notifications")}</h2>
-          <p className="text-slate-400 text-[11px]">{t("settings.notificationsDescription")}</p>
+          <p className={`${isDark ? "text-slate-400" : "text-slate-500"} text-[11px]`}>
+            {t("settings.notificationsDescription")}
+          </p>
         </section>
 
-        <section className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+        <section
+          className={`rounded-xl border px-4 py-3 ${
+            isDark ? "border-slate-800 bg-slate-900/60" : "border-slate-200 bg-white"
+          }`}
+        >
           <h2 className="text-[13px] font-semibold mb-2">{t("settings.app")}</h2>
-          <p className="text-slate-400 text-[11px] mb-1">{t("settings.appDescription")}</p>
+          <p className={`${isDark ? "text-slate-400" : "text-slate-500"} text-[11px] mb-1`}>
+            {t("settings.appDescription")}
+          </p>
           <div className="flex items-center justify-between py-1">
-            <span className="text-slate-300">{t("profile.language")}</span>
+            <span className={isDark ? "text-slate-300" : "text-slate-600"}>
+              {t("profile.language")}
+            </span>
             <LanguageSelector />
           </div>
           <div className="flex items-center justify-between py-1">
-            <span className="text-slate-300">{t("settings.theme")}</span>
-            <span className="text-slate-400 text-[11px]">{t("settings.themeValue")}</span>
+            <span className={isDark ? "text-slate-300" : "text-slate-600"}>{t("settings.theme")}</span>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                isDark ? "bg-slate-700" : "bg-slate-200"
+              }`}
+              aria-label="Toggle theme"
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                  isDark ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
           </div>
         </section>
 

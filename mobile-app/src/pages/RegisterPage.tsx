@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../utils/axios";
 import type { AxiosError } from "axios";
+import { useAppSelector } from "../hooks/useAppHooks";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ const RegisterPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const theme = useAppSelector((state) => state.ui.theme);
+  const isDark = theme === "dark";
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -58,11 +61,15 @@ const RegisterPage = () => {
   };
 
   return (
-  <div className="min-h-screen flex items-center justify-center px-6 py-8 bg-slate-950 text-white">
+  <div
+    className={`min-h-screen flex items-center justify-center px-6 py-8 ${
+      isDark ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"
+    }`}
+  >
     <div className="w-full max-w-sm">
     <div className="mb-8 text-center">
             <h1 className="text-2xl font-semibold mb-1">Create account</h1>
-            <p className="text-xs text-slate-400">
+            <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
               Sign up to purchase bus tickets and manage your rides.
             </p>
           </div>
@@ -80,7 +87,7 @@ const RegisterPage = () => {
 
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-slate-200 mb-1">
+              <label className={`block text-xs font-medium mb-1 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                 Full name
               </label>
               <input
@@ -88,13 +95,17 @@ const RegisterPage = () => {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+                className={`w-full rounded-lg border px-3 py-2 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/70 ${
+                  isDark
+                    ? "border-slate-700 bg-slate-950 text-slate-100"
+                    : "border-slate-200 bg-white text-slate-900"
+                }`}
                 placeholder="John Doe"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-200 mb-1">
+              <label className={`block text-xs font-medium mb-1 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                 Email
               </label>
               <input
@@ -102,13 +113,17 @@ const RegisterPage = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+                className={`w-full rounded-lg border px-3 py-2 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/70 ${
+                  isDark
+                    ? "border-slate-700 bg-slate-950 text-slate-100"
+                    : "border-slate-200 bg-white text-slate-900"
+                }`}
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-200 mb-1">
+              <label className={`block text-xs font-medium mb-1 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                 Phone number
               </label>
               <input
@@ -116,14 +131,18 @@ const RegisterPage = () => {
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+                className={`w-full rounded-lg border px-3 py-2 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/70 ${
+                  isDark
+                    ? "border-slate-700 bg-slate-950 text-slate-100"
+                    : "border-slate-200 bg-white text-slate-900"
+                }`}
                 placeholder="07XXXXXXXX"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-200 mb-1">
+                <label className={`block text-xs font-medium mb-1 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                   Password
                 </label>
                 <div className="relative">
@@ -132,13 +151,19 @@ const RegisterPage = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+                    className={`w-full rounded-lg border px-3 pr-9 py-2 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/70 ${
+                      isDark
+                        ? "border-slate-700 bg-slate-950 text-slate-100"
+                        : "border-slate-200 bg-white text-slate-900"
+                    }`}
                     placeholder="••••••••"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-200"
+                    className={`absolute inset-y-0 right-0 flex items-center pr-3 ${
+                      isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-400 hover:text-slate-600"
+                    }`}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
@@ -176,7 +201,7 @@ const RegisterPage = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-200 mb-1">
+                <label className={`block text-xs font-medium mb-1 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                   Confirm password
                 </label>
                 <input
@@ -184,7 +209,11 @@ const RegisterPage = () => {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+                  className={`w-full rounded-lg border px-3 py-2 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/70 ${
+                    isDark
+                      ? "border-slate-700 bg-slate-950 text-slate-100"
+                      : "border-slate-200 bg-white text-slate-900"
+                  }`}
                   placeholder="••••••••"
                 />
               </div>
@@ -193,17 +222,17 @@ const RegisterPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-white bg-white px-4 py-2.5 text-xs font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70 focus:ring-offset-0 disabled:opacity-60"
+              className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:ring-offset-0 disabled:opacity-60"
             >
               {loading ? "Creating account..." : "Create account"}
             </button>
           </form>
 
-          <p className="mt-6 text-[11px] text-slate-400 text-center">
+            <p className={`mt-6 text-[11px] text-center ${isDark ? "text-slate-400" : "text-slate-500"}`}>
             Already have an account?{" "}
             <Link
               to="/login"
-              className="font-medium text-emerald-400 hover:text-emerald-300"
+                className="font-medium text-blue-600 hover:text-blue-500"
             >
               Sign in
             </Link>

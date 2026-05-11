@@ -2,12 +2,15 @@ import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../utils/axios";
 import MobileShell from "../layout/MobileShell";
+import { useAppSelector } from "../hooks/useAppHooks";
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const theme = useAppSelector((state) => state.ui.theme);
+  const isDark = theme === "dark";
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -32,7 +35,7 @@ const ForgotPasswordPage = () => {
   return (
     <MobileShell title="Forgot password" showBackButton>
       <div className="mt-2">
-        <p className="text-[11px] text-slate-400 mb-4">
+        <p className={`text-[11px] mb-4 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
           Enter the email associated with your account. If it exists, we&apos;ll send instructions to reset your password.
         </p>
 
@@ -50,7 +53,7 @@ const ForgotPasswordPage = () => {
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-slate-200 mb-1">
+            <label className={`block text-xs font-medium mb-1 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
               Email
             </label>
             <input
@@ -58,7 +61,11 @@ const ForgotPasswordPage = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 focus:border-emerald-500/70"
+              className={`w-full rounded-lg border px-3 py-2 text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/70 ${
+                isDark
+                  ? "border-slate-700 bg-slate-900/60 text-white"
+                  : "border-slate-200 bg-white text-slate-900"
+              }`}
               placeholder="you@example.com"
             />
           </div>
@@ -66,17 +73,17 @@ const ForgotPasswordPage = () => {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-1 inline-flex w-full items-center justify-center rounded-lg border border-white bg-white px-4 py-2.5 text-xs font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70 focus:ring-offset-0 disabled:opacity-60"
+            className="mt-1 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:ring-offset-0 disabled:opacity-60"
           >
             {submitting ? "Sending..." : "Send reset link"}
           </button>
         </form>
 
-        <p className="mt-5 text-[11px] text-slate-400 text-center">
+        <p className={`mt-5 text-[11px] text-center ${isDark ? "text-slate-400" : "text-slate-500"}`}>
           Remembered your password?{" "}
           <Link
             to="/login"
-            className="font-medium text-emerald-400 hover:text-emerald-300"
+            className="font-medium text-blue-600 hover:text-blue-500"
           >
             Back to sign in
           </Link>

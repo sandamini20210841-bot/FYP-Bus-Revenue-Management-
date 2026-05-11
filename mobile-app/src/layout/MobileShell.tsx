@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAppDispatch } from "../hooks/useAppHooks";
+import { useAppDispatch, useAppSelector } from "../hooks/useAppHooks";
 import { logout } from "../store/slices/authSlice";
 
 interface MobileShellProps {
@@ -13,6 +13,8 @@ interface MobileShellProps {
 const MobileShell = ({ title, subtitle, children, showBackButton = false }: MobileShellProps) => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const theme = useAppSelector((state) => state.ui.theme);
+  const isDark = theme === "dark";
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -25,13 +27,21 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-white">
+    <div
+      className={`min-h-screen flex flex-col ${
+        isDark ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"
+      }`}
+    >
       <header className="px-5 pt-4 pb-3 flex items-center justify-between">
         {showBackButton ? (
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="mr-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white bg-white text-slate-900 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70"
+            className={`mr-3 inline-flex h-8 w-8 items-center justify-center rounded-full border bg-white text-slate-900 focus:outline-none focus:ring-2 ${
+              isDark
+                ? "border-white hover:bg-slate-100 focus:ring-white/70"
+                : "border-slate-200 hover:bg-slate-100 focus:ring-slate-200"
+            }`}
             aria-label="Go back"
           >
             <svg
@@ -54,7 +64,7 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
         <div className="flex flex-col flex-1 items-center">
           <h1 className="text-lg font-semibold text-center">{title}</h1>
           {subtitle && (
-            <p className="text-[11px] text-slate-400 mt-0.5 text-center">
+            <p className={`text-[11px] mt-0.5 text-center ${isDark ? "text-slate-400" : "text-slate-500"}`}>
               {subtitle}
             </p>
           )}
@@ -63,7 +73,11 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
         <button
           type="button"
           onClick={() => setMenuOpen((prev) => !prev)}
-          className="ml-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white bg-white text-slate-900 shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-white/70"
+          className={`ml-3 inline-flex h-8 w-8 items-center justify-center rounded-full border bg-white text-slate-900 shadow-sm focus:outline-none focus:ring-2 ${
+            isDark
+              ? "border-white hover:bg-slate-100 focus:ring-white/70"
+              : "border-slate-200 hover:bg-slate-100 focus:ring-slate-200"
+          }`}
           aria-label="Open menu"
         >
           <svg
@@ -91,11 +105,13 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
           onClick={() => setMenuOpen(false)}
         >
           <div
-            className="absolute right-0 top-0 h-full w-60 max-w-[70%] bg-slate-900 shadow-xl border-l border-slate-800 flex flex-col pt-4 pb-6"
+            className={`absolute right-0 top-0 h-full w-60 max-w-[70%] shadow-xl border-l flex flex-col pt-4 pb-6 ${
+              isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-5 pb-4 border-b border-slate-800 mb-2">
-              <p className="text-xs uppercase tracking-wide text-slate-500">
+            <div className={`px-5 pb-4 mb-2 ${isDark ? "border-b border-slate-800" : "border-b border-slate-200"}`}>
+              <p className={`text-xs uppercase tracking-wide ${isDark ? "text-slate-500" : "text-slate-500"}`}>
                 Menu
               </p>
             </div>
@@ -107,9 +123,15 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
                   navigate("/tickets/purchase");
                   setMenuOpen(false);
                 }}
-                className="flex w-full items-center rounded-lg px-3 py-2 text-slate-100 hover:bg-slate-800/80"
+                className={`flex w-full items-center rounded-lg px-3 py-2 ${
+                  isDark ? "text-slate-100 hover:bg-slate-800/80" : "text-slate-700 hover:bg-slate-100"
+                }`}
               >
-                <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-emerald-400">
+                <span
+                  className={`mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md ${
+                    isDark ? "bg-slate-800 text-emerald-400" : "bg-slate-100 text-blue-600"
+                  }`}
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4"
@@ -133,9 +155,15 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
                   navigate("/tickets/history");
                   setMenuOpen(false);
                 }}
-                className="flex w-full items-center rounded-lg px-3 py-2 text-slate-100 hover:bg-slate-800/80"
+                className={`flex w-full items-center rounded-lg px-3 py-2 ${
+                  isDark ? "text-slate-100 hover:bg-slate-800/80" : "text-slate-700 hover:bg-slate-100"
+                }`}
               >
-                <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-emerald-400">
+                <span
+                  className={`mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md ${
+                    isDark ? "bg-slate-800 text-emerald-400" : "bg-slate-100 text-blue-600"
+                  }`}
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4"
@@ -161,9 +189,15 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
                   navigate("/profile");
                   setMenuOpen(false);
                 }}
-                className="flex w-full items-center rounded-lg px-3 py-2 text-slate-100 hover:bg-slate-800/80"
+                className={`flex w-full items-center rounded-lg px-3 py-2 ${
+                  isDark ? "text-slate-100 hover:bg-slate-800/80" : "text-slate-700 hover:bg-slate-100"
+                }`}
               >
-                <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-emerald-400">
+                <span
+                  className={`mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md ${
+                    isDark ? "bg-slate-800 text-emerald-400" : "bg-slate-100 text-blue-600"
+                  }`}
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4"
@@ -187,9 +221,15 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
                   navigate("/settings");
                   setMenuOpen(false);
                 }}
-                className="flex w-full items-center rounded-lg px-3 py-2 text-slate-100 hover:bg-slate-800/80"
+                className={`flex w-full items-center rounded-lg px-3 py-2 ${
+                  isDark ? "text-slate-100 hover:bg-slate-800/80" : "text-slate-700 hover:bg-slate-100"
+                }`}
               >
-                <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-emerald-400">
+                <span
+                  className={`mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md ${
+                    isDark ? "bg-slate-800 text-emerald-400" : "bg-slate-100 text-blue-600"
+                  }`}
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4"
@@ -208,11 +248,11 @@ const MobileShell = ({ title, subtitle, children, showBackButton = false }: Mobi
               </button>
             </nav>
 
-            <div className="mt-auto px-2 pt-3 border-t border-slate-800">
+            <div className={`mt-auto px-2 pt-3 ${isDark ? "border-t border-slate-800" : "border-t border-slate-200"}`}>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-500/10"
               >
                 <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-400">
                   <svg
