@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -70,19 +71,46 @@ func GetTransactions(c *fiber.Ctx) error {
 		args = append(args, userID)
 		argPos++
 	}
-	if dateFrom != "" && dateTo != "" && dateFrom == dateTo {
-		whereParts = append(whereParts, "tr.transaction_date::date = $"+itoa(argPos)+"::date")
-		args = append(args, dateFrom)
-		argPos++
-	} else {
+	// Date filtering:
+	// The UI typically supplies YYYY-MM-DD (a date without timezone). If we treat that as UTC,
+	// transactions near midnight can appear on the "wrong" day for local users.
+	// We interpret dates in APP_TIMEZONE (default Asia/Colombo) and convert to a UTC time range.
+	if dateFrom != "" || dateTo != "" {
+		tzName := strings.TrimSpace(os.Getenv("APP_TIMEZONE"))
+		if tzName == "" {
+			tzName = "Asia/Colombo"
+		}
+		loc, err := time.LoadLocation(tzName)
+		if err != nil {
+			loc = time.UTC
+		}
+
+		var startUTC time.Time
+		var endUTC time.Time
+
 		if dateFrom != "" {
-			whereParts = append(whereParts, "tr.transaction_date >= $"+itoa(argPos)+"::date")
-			args = append(args, dateFrom)
+			startLocal, err := time.ParseInLocation("2006-01-02", dateFrom, loc)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "Invalid dateFrom; expected YYYY-MM-DD",
+				})
+			}
+			startUTC = startLocal.UTC()
+			whereParts = append(whereParts, "tr.transaction_date >= $"+itoa(argPos))
+			args = append(args, startUTC)
 			argPos++
 		}
+
 		if dateTo != "" {
-			whereParts = append(whereParts, "tr.transaction_date < ($"+itoa(argPos)+"::date + INTERVAL '1 day')")
-			args = append(args, dateTo)
+			endLocal, err := time.ParseInLocation("2006-01-02", dateTo, loc)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "Invalid dateTo; expected YYYY-MM-DD",
+				})
+			}
+			endUTC = endLocal.AddDate(0, 0, 1).UTC()
+			whereParts = append(whereParts, "tr.transaction_date < $"+itoa(argPos))
+			args = append(args, endUTC)
 			argPos++
 		}
 	}
@@ -92,14 +120,28 @@ func GetTransactions(c *fiber.Ctx) error {
 		argPos++
 	}
 	if busNumber != "" {
-		whereParts = append(whereParts, "TRIM(COALESCE(t.bus_number, r.bus_number, '')) ILIKE TRIM($"+itoa(argPos)+")")
-		args = append(args, busNumber)
-		argPos++
+		// Use a trim + case-insensitive compare to avoid missing matches due to case or stray spaces.
+		// If the caller provides wildcards, we keep pattern matching.
+		if strings.ContainsAny(busNumber, "%_") {
+			whereParts = append(whereParts, "(TRIM(COALESCE(t.bus_number, '')) ILIKE TRIM($"+itoa(argPos)+") OR TRIM(COALESCE(r.bus_number, '')) ILIKE TRIM($"+itoa(argPos)+"))")
+			args = append(args, busNumber)
+			argPos++
+		} else {
+			whereParts = append(whereParts, "(LOWER(TRIM(COALESCE(t.bus_number, ''))) = LOWER(TRIM($"+itoa(argPos)+")) OR LOWER(TRIM(COALESCE(r.bus_number, ''))) = LOWER(TRIM($"+itoa(argPos)+")))")
+			args = append(args, busNumber)
+			argPos++
+		}
 	}
 	if routeNumber != "" {
-		whereParts = append(whereParts, "TRIM(COALESCE(r.route_number, '')) ILIKE TRIM($"+itoa(argPos)+")")
-		args = append(args, routeNumber)
-		argPos++
+		if strings.ContainsAny(routeNumber, "%_") {
+			whereParts = append(whereParts, "TRIM(COALESCE(r.route_number, '')) ILIKE TRIM($"+itoa(argPos)+")")
+			args = append(args, routeNumber)
+			argPos++
+		} else {
+			whereParts = append(whereParts, "LOWER(TRIM(COALESCE(r.route_number, ''))) = LOWER(TRIM($"+itoa(argPos)+"))")
+			args = append(args, routeNumber)
+			argPos++
+		}
 	}
 	if role == "bus_owner" && actorUserID != "" && actorUserID != "<nil>" {
 		whereParts = append(whereParts, `t.bus_number IN (
