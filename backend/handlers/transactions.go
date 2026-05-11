@@ -157,11 +157,12 @@ func GetTransactions(c *fiber.Ctx) error {
 		whereClause = " WHERE " + strings.Join(whereParts, " AND ")
 	}
 
-	countQuery := "SELECT COUNT(*) " + baseFrom + whereClause
-	var total int
-	if err := database.QueryRow(countQuery, args...).Scan(&total); err != nil {
+	statsQuery := "SELECT COUNT(*), COALESCE(SUM(tr.amount), 0)::float8 " + baseFrom + whereClause
+	var totalCount int
+	var totalAmount float64
+	if err := database.QueryRow(statsQuery, args...).Scan(&totalCount, &totalAmount); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to count transactions",
+			"error": "Failed to load transaction totals",
 		})
 	}
 
@@ -227,7 +228,10 @@ func GetTransactions(c *fiber.Ctx) error {
 		"pagination": fiber.Map{
 			"page":  page,
 			"limit": limit,
-			"total": total,
+			// `total` is the sum of all amounts matching the filter (across all pages).
+			"total": totalAmount,
+			// `total_count` is the number of matching rows (used for pagination).
+			"total_count": totalCount,
 		},
 	})
 }

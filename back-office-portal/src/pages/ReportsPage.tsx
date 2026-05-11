@@ -158,7 +158,10 @@ const ReportsPage: React.FC = () => {
         status: row.status || "",
       }));
       setTransactions(mapped);
-      setTotalPages(Math.max(1, Math.ceil(Number(response.data?.pagination?.total || mapped.length) / rowsPerPage)));
+	  const totalCount = Number(
+		response.data?.pagination?.total_count ?? response.data?.pagination?.total ?? mapped.length
+	  );
+	  setTotalPages(Math.max(1, Math.ceil((Number.isFinite(totalCount) ? totalCount : mapped.length) / rowsPerPage)));
     } catch (err: any) {
       console.error("Failed to load transactions", err);
       if (requestId != transactionsRequestIdRef.current) {
