@@ -343,7 +343,7 @@ func CreateUser(c *fiber.Ctx) error {
 	}
 
 	// Temporary default password for admin-created users.
-	tempPassword := "ChangeMe123!"
+	tempPassword := "12345678"
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
