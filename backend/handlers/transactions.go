@@ -209,17 +209,17 @@ func GetTransactions(c *fiber.Ctx) error {
 		}
 
 		transactions = append(transactions, fiber.Map{
-			"id":               id,
-			"route_number":     routeNumber,
-			"bus_number":       busNumber,
-			"ticket_number":    ticketNumber,
-			"transaction_date": transactionDate,
-			"amount":           amount,
-			"from_stop_name":   fromStop.String,
-			"to_stop_name":     toStop.String,
+			"id":                id,
+			"route_number":      routeNumber,
+			"bus_number":        busNumber,
+			"ticket_number":     ticketNumber,
+			"transaction_date":  transactionDate,
+			"amount":            amount,
+			"from_stop_name":    fromStop.String,
+			"to_stop_name":      toStop.String,
 			"start_destination": fromStop.String,
 			"end_destination":   toStop.String,
-			"status":           trStatus,
+			"status":            trStatus,
 		})
 	}
 
