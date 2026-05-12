@@ -36,6 +36,8 @@ const ReportsPage: React.FC = () => {
   const [customDateError, setCustomDateError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [transactions, setTransactions] = useState<ReportTransaction[]>([]);
+  const [overallTotalAmount, setOverallTotalAmount] = useState<number>(0);
+  const [overallTotalCount, setOverallTotalCount] = useState<number>(0);
   const [registeredBusNumbers, setRegisteredBusNumbers] = useState<string[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
@@ -158,16 +160,25 @@ const ReportsPage: React.FC = () => {
         status: row.status || "",
       }));
       setTransactions(mapped);
-	  const totalCount = Number(
-		response.data?.pagination?.total_count ?? response.data?.pagination?.total ?? mapped.length
-	  );
-	  setTotalPages(Math.max(1, Math.ceil((Number.isFinite(totalCount) ? totalCount : mapped.length) / rowsPerPage)));
+
+	  // pagination.total_count = number of matching rows (for page count)
+	  const totalCount = Number(response.data?.pagination?.total_count ?? 0);
+	  setOverallTotalCount(Number.isFinite(totalCount) ? totalCount : 0);
+
+	  // pagination.total = sum(amount) across ALL matching rows (not just this page)
+	  const totalAmount = Number(response.data?.pagination?.total ?? 0);
+	  setOverallTotalAmount(Number.isFinite(totalAmount) ? totalAmount : 0);
+
+	  const pageCountBasis = Number.isFinite(totalCount) && totalCount > 0 ? totalCount : mapped.length;
+	  setTotalPages(Math.max(1, Math.ceil(pageCountBasis / rowsPerPage)));
     } catch (err: any) {
       console.error("Failed to load transactions", err);
       if (requestId != transactionsRequestIdRef.current) {
         return;
       }
       setTransactions([]);
+      setOverallTotalAmount(0);
+      setOverallTotalCount(0);
       let errorMsg = "Failed to load transactions.";
       if (err?.response?.data?.error) {
         errorMsg = err.response.data.error;
@@ -258,10 +269,10 @@ const ReportsPage: React.FC = () => {
   }, [currentPage, totalPages]);
 
   const visibleTransactionCount = filteredTransactions.length;
-  const visibleTransactionTotal = filteredTransactions.reduce(
-    (sum, tr) => sum + Number(tr.amount || 0),
-    0
-  );
+  const visibleTransactionTotal = filteredTransactions.reduce((sum, tr) => sum + Number(tr.amount || 0), 0);
+
+  const displayTotalAmount = overallTotalAmount > 0 ? overallTotalAmount : visibleTransactionTotal;
+  const displayTotalCount = overallTotalCount > 0 ? overallTotalCount : visibleTransactionCount;
 
   const closeExportMenu = () => {
     setIsExportMenuOpen(false);
@@ -675,11 +686,11 @@ const ReportsPage: React.FC = () => {
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-4 font-semibold text-slate-700">{t("reports.totalLabel")}</td>
                 <td className="py-3 pr-4 font-bold text-emerald-600">
-                  Rs. {visibleTransactionTotal.toFixed(2)}
+                  Rs. {Number(displayTotalAmount || 0).toFixed(2)}
                 </td>
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-0 text-slate-500">
-                  {visibleTransactionCount} {t("reports.transactions")}
+                  {displayTotalCount} {t("reports.transactions")}
                 </td>
               </tr>
             </tfoot>

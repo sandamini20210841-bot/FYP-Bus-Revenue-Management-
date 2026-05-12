@@ -225,6 +225,8 @@ func GetTransactions(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"transactions": transactions,
+		// Total amount across all matching transactions (all pages).
+		"total_amount": totalAmount,
 		"pagination": fiber.Map{
 			"page":  page,
 			"limit": limit,
